@@ -61,7 +61,7 @@ SELECT cron.schedule(
   $$
   SELECT net.http_post(
     url := 'https://your-project.supabase.co/functions/v1/update-wait-times',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjdmlscmpucGlhcGhoemx1YXdyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjY5ODAxNCwiZXhwIjoyMDY4Mjc0MDE0fQ.SvHGnLxYghBvHSYruG1_hajttAEbC58nhLmBRT3fKhc"}'::jsonb,
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer '',
     body := '{}'::jsonb
   );
   $$
