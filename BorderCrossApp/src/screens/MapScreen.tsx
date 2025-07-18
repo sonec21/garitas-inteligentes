@@ -9,6 +9,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   SafeAreaView,
+  Platform,
+  PermissionsAndroid, // Import PermissionsAndroid
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
@@ -16,6 +18,7 @@ import { BorderCrossing } from '../types';
 import { GaritaService } from '../services/borderService';
 import { useTheme } from '../context/ThemeContext';
 import Icon from '../components/Icon';
+import { GOOGLE_MAPS_API_KEY } from '@env'; // Import GOOGLE_MAPS_API_KEY
 
 const MapScreen = () => {
   const { theme } = useTheme();
@@ -34,6 +37,9 @@ const MapScreen = () => {
   const [borderCrossings, setBorderCrossings] = useState<BorderCrossing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Log the API key for debugging
+  console.log('🗺️ MapScreen: GOOGLE_MAPS_API_KEY:', GOOGLE_MAPS_API_KEY);
 
   const loadBorderCrossings = useCallback(async () => {
     setLoading(true);
@@ -61,14 +67,40 @@ const MapScreen = () => {
   }, []);
 
   useEffect(() => {
-    getCurrentLocation();
+    requestLocationPermission(); // Request permission on mount
     loadBorderCrossings();
   }, [loadBorderCrossings]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadBorderCrossings();
-    setRefreshing(false);
+  const requestLocationPermission = async () => {
+    if (Platform.OS === 'ios') {
+      const status = await Geolocation.requestAuthorization('whenInUse');
+      if (status === 'granted') {
+        getCurrentLocation();
+      } else {
+        Alert.alert('Location Permission Denied', 'Please enable location services for this app in settings.');
+      }
+    } else if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission',
+            message:
+              'This app needs access to your location to show nearby border crossings.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          },
+        );
+        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+          getCurrentLocation();
+        } else {
+          Alert.alert('Location Permission Denied', 'Please enable location services for this app in settings.');
+        }
+      } catch (err) {
+        console.warn(err);
+      }
+    }
   };
 
   const getCurrentLocation = () => {
@@ -89,6 +121,12 @@ const MapScreen = () => {
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 },
     );
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadBorderCrossings();
+    setRefreshing(false);
   };
 
   const getMarkerColor = (status: string) => {

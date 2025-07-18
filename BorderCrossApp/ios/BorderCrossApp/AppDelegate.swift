@@ -2,6 +2,8 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
+import GoogleMaps // Import GoogleMaps
+import ReactNativeConfig // Import ReactNativeConfig
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -14,6 +16,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    // Initialize Google Maps SDK with API Key
+    if let googleMapsApiKey = ReactNativeConfig.env(for: "GOOGLE_MAPS_API_KEY") {
+      GMSServices.provideAPIKey(googleMapsApiKey)
+    } else {
+      print("Error: GOOGLE_MAPS_API_KEY not found in .env file.")
+    }
+
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
