@@ -88,6 +88,8 @@ serve(async req => {
         message: 'Traffic data scraped and updated successfully',
         crossings_updated: updateResults.crossings_updated,
         lanes_updated: updateResults.lanes_updated,
+        old_lanes_cleaned: updateResults.old_lanes_cleaned,
+        total_crossings_processed: allScrapedData.length,
         timestamp: new Date().toISOString(),
       }),
       {

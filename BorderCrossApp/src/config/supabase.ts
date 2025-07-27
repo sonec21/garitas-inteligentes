@@ -1,17 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
-import { NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY } from '@env';
 
-const SUPABASE_URL: string = String(NEXT_PUBLIC_SUPABASE_URL || '');
-const SUPABASE_ANON_KEY: string = String(NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+// Use hardcoded values for now since @env is not working
+const SUPABASE_URL = 'https://tcvilrjnpiaphhzluawr.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-console.log('🔍 Initializing Supabase client with environment variables');
-console.log('URL:', SUPABASE_URL);
-console.log('Key length:', SUPABASE_ANON_KEY.length);
-
-// Add a check to see if keys are actually present
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('❌ Supabase URL or Anon Key is missing! Check your .env file and babel.config.js setup.');
-}
+console.log('🔧 Using hardcoded Supabase configuration');
+console.log('🔗 Supabase URL:', SUPABASE_URL);
+console.log('🔑 Supabase key length:', SUPABASE_ANON_KEY.length);
 
 // Create the Supabase client
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -23,3 +18,16 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 console.log('✅ Supabase client created successfully');
+
+// Test the connection
+supabase.from('border_crossings').select('id').limit(1)
+  .then(({ data, error }) => {
+    if (error) {
+      console.error('❌ Supabase connection test failed:', error);
+    } else {
+      console.log('✅ Supabase connection test successful');
+    }
+  })
+  .catch(err => {
+    console.error('❌ Supabase connection test error:', err);
+  });

@@ -9,7 +9,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Icon from '../components/Icon';
 import { BorderCrossing, Lane } from '../types';
 import { useTheme } from '../context/ThemeContext';
 
@@ -60,54 +60,40 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
   }, [lane]);
 
   const generateSimulatedCars = () => {
-    const totalCars = Math.min(lane.vehicle_count, 20);
+    // Calculate available space: simulation height (450px) - gate area (180px) - starting line (50px) = 220px
+    // Each car needs 40px spacing, so max cars = 220px / 40px = 5.5, round down to 5
+    const maxCarsPerLane = 5; // Conservative limit to prevent overlap
+    const totalCars = Math.min(lane.vehicle_count, 10); // Max 10 total (5 per lane)
     const carsData: SimulatedCar[] = [];
     
-    const carTypes = ['car', 'truck', 'motorcycle'] as const;
-    const carColors = ['#2C3E50', '#34495E', '#7F8C8D', '#95A5A6', '#BDC3C7', '#ECF0F1'];
+    const carColors = ['#6B7280', '#9CA3AF', '#D1D5DB']; // Grayscale like the screenshot
     
     // Split cars between two lanes
-    const leftLaneCars = Math.ceil(totalCars / 2);
-    const rightLaneCars = totalCars - leftLaneCars;
+    const leftLaneCars = Math.min(Math.ceil(totalCars / 2), maxCarsPerLane);
+    const rightLaneCars = Math.min(totalCars - leftLaneCars, maxCarsPerLane);
     
     // Generate cars for left lane
-    let currentPosition = 95;
     for (let i = 0; i < leftLaneCars; i++) {
-      const carType = carTypes[Math.floor(Math.random() * carTypes.length)];
-      const vehicleSpacing = getVehicleSpacing(carType);
-      
       carsData.push({
         id: `left-car-${i}`,
-        type: carType,
+        type: 'car',
         color: carColors[Math.floor(Math.random() * carColors.length)],
-        position: currentPosition,
+        position: i, // Just use index for simple stacking
         lane: 'left',
-        gateNumber: Math.floor(Math.random() * 2) + 1, // Gates 1-2 for left lane
-        isUserCar: i === Math.floor(leftLaneCars / 3),
+        isUserCar: i === 2, // User car at 3rd position
       });
-      
-      currentPosition -= (vehicleSpacing + 8);
-      if (currentPosition < 5) break;
     }
     
     // Generate cars for right lane
-    currentPosition = 95;
     for (let i = 0; i < rightLaneCars; i++) {
-      const carType = carTypes[Math.floor(Math.random() * carTypes.length)];
-      const vehicleSpacing = getVehicleSpacing(carType);
-      
       carsData.push({
         id: `right-car-${i}`,
-        type: carType,
+        type: 'car',
         color: carColors[Math.floor(Math.random() * carColors.length)],
-        position: currentPosition,
+        position: i, // Just use index for simple stacking
         lane: 'right',
-        gateNumber: Math.floor(Math.random() * 2) + 3, // Gates 3-4 for right lane
-        isUserCar: !carsData.some(car => car.isUserCar) && i === Math.floor(rightLaneCars / 3),
+        isUserCar: !carsData.some(car => car.isUserCar) && i === 2,
       });
-      
-      currentPosition -= (vehicleSpacing + 8);
-      if (currentPosition < 5) break;
     }
     
     setCars(carsData);
@@ -163,11 +149,11 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
   const getCarIcon = (type: string) => {
     switch (type) {
       case 'truck':
-        return 'local-shipping';
+        return 'truck';
       case 'motorcycle':
-        return 'motorcycle';
+        return 'car-simple';
       default:
-        return 'directions-car';
+        return 'car';
     }
   };
 
@@ -185,86 +171,96 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
 
   const renderBorderGate = () => (
     <View style={styles.borderGateArea}>
-      {/* Main border line */}
-      <View style={[styles.borderLine, { backgroundColor: theme.colors.error }]} />
+      {/* US Inspection Gates Label */}
+      <Text style={[styles.usInspectionLabel, { color: theme.colors.text }]}>
+        US Inspection Gates
+      </Text>
       
       {/* Individual inspection gates */}
       <View style={styles.inspectionGates}>
-        {[1, 2, 3, 4].map((gateNum) => (
-          <View key={gateNum} style={[styles.gate, { backgroundColor: theme.colors.surface }]}>
-            <MaterialIcons name="security" size={16} color={theme.colors.accent} />
-            <Text style={[styles.gateNumber, { color: theme.colors.text }]}>
-              {gateNum}
+        {[1, 1, 1, 1].map((_, index) => (
+          <View key={index} style={styles.gateColumn}>
+            <Text style={[styles.gateLabel, { color: theme.colors.textSecondary }]}>
+              Gate 1
             </Text>
+            <View style={[styles.gate, { 
+              backgroundColor: theme.colors.surface, 
+              borderColor: theme.colors.textTertiary,
+              borderWidth: 2 
+            }]}>
+              {/* Car underneath gate */}
+              <View style={[styles.gateCircle, { 
+                backgroundColor: '#9CA3AF',
+                borderColor: 'transparent',
+                borderWidth: 0
+              }]} />
+            </View>
           </View>
         ))}
       </View>
       
-      {/* Border label */}
-      <Text style={[styles.borderLabel, { color: theme.colors.text }]}>
-        🇺🇸 Border Inspection Gates 🇲🇽
-      </Text>
+      {/* No cars at gates - clean layout */}
     </View>
   );
 
   const renderLaneLines = () => {
-    const startX = (SIMULATION_WIDTH - TOTAL_LANES_WIDTH) / 2;
+    const centerX = SIMULATION_WIDTH / 2;
+    const laneWidth = 30; // Exact width matching screenshot
+    const spacing = 15; // Minimal gap between lanes
+    const leftLaneCenter = centerX - spacing;
+    const rightLaneCenter = centerX + spacing;
     
     return (
       <View style={styles.laneContainer}>
-        {/* Left lane boundaries */}
-        <View style={[
-          styles.laneLine, 
-          { left: startX, backgroundColor: theme.colors.textTertiary + '60' }
-        ]} />
-        <View style={[
-          styles.laneLine, 
-          { left: startX + LANE_WIDTH, backgroundColor: theme.colors.textTertiary + '80' }
-        ]} />
+        {/* Left Lane Boundary */}
+        <View style={[styles.laneVerticalLine, { 
+          left: leftLaneCenter - laneWidth/2, 
+          backgroundColor: theme.colors.textTertiary + '90' 
+        }]} />
         
-        {/* Right lane boundaries */}
-        <View style={[
-          styles.laneLine, 
-          { left: startX + (LANE_WIDTH * 2), backgroundColor: theme.colors.textTertiary + '60' }
-        ]} />
-        
-        {/* Center divider between lanes (dashed) */}
-        <View style={[styles.centerDivider, { left: startX + LANE_WIDTH }]}>
-          {Array.from({ length: 30 }).map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.centerDash,
-                { backgroundColor: theme.colors.textTertiary + '80' },
-              ]}
-            />
-          ))}
-        </View>
-        
-        {/* Gate approach lines (where lanes start splitting) */}
-        <View style={[styles.splitZone, { top: '10%', height: '25%' }]}>
-          {[1, 2, 3, 4].map((gateNum) => (
-            <View
-              key={gateNum}
-              style={[
-                styles.gateLine,
-                {
-                  left: getGatePosition(gateNum) - 1,
-                  backgroundColor: theme.colors.warning + '40',
-                },
-              ]}
-            />
-          ))}
-        </View>
-        
-        {/* Lane labels */}
-        <View style={[styles.laneLabels, { left: startX }]}>
-          <View style={[styles.laneLabel, { width: LANE_WIDTH }]}>
-            <Text style={[styles.laneText, { color: theme.colors.textSecondary }]}>LEFT</Text>
-          </View>
-          <View style={[styles.laneLabel, { width: LANE_WIDTH }]}>
-            <Text style={[styles.laneText, { color: theme.colors.textSecondary }]}>RIGHT</Text>
-          </View>
+        {/* Center divider - thin line */}
+        <View style={[styles.laneVerticalLine, { 
+          left: centerX - 0.5, 
+          backgroundColor: theme.colors.textTertiary + '90',
+          width: 1
+        }]} />
+
+        {/* Right Lane Boundary */}
+        <View style={[styles.laneVerticalLine, { 
+          left: rightLaneCenter + laneWidth/2, 
+          backgroundColor: theme.colors.textTertiary + '90' 
+        }]} />
+
+        {/* Left Lane Cars - with proper gaps between cars */}
+        <View style={[styles.queuedCar, { bottom: 30, left: leftLaneCenter - 10, backgroundColor: '#9CA3AF' }]} />
+        <View style={[styles.queuedCar, { bottom: 58, left: leftLaneCenter - 10, backgroundColor: '#6B7280' }]} />
+        <View style={[styles.queuedCar, { bottom: 86, left: leftLaneCenter - 10, backgroundColor: '#D1D5DB' }]} />
+        <View style={[styles.queuedCar, { bottom: 114, left: leftLaneCenter - 10, backgroundColor: '#9CA3AF' }]} />
+        <View style={[styles.queuedCar, { bottom: 142, left: leftLaneCenter - 10, backgroundColor: '#6B7280' }]} />
+        <View style={[styles.queuedCar, { bottom: 170, left: leftLaneCenter - 10, backgroundColor: '#D1D5DB' }]} />
+        <View style={[styles.queuedCar, { bottom: 198, left: leftLaneCenter - 10, backgroundColor: '#9CA3AF' }]} />
+        <View style={[styles.queuedCar, { bottom: 226, left: leftLaneCenter - 10, backgroundColor: '#6B7280' }]} />
+
+        {/* Right Lane Cars - with proper gaps between cars */}
+        <View style={[styles.queuedCar, { bottom: 30, left: rightLaneCenter - 10, backgroundColor: '#D1D5DB' }]} />
+        <View style={[styles.queuedCar, { bottom: 58, left: rightLaneCenter - 10, backgroundColor: '#9CA3AF' }]} />
+        <View style={[styles.queuedCar, { bottom: 86, left: rightLaneCenter - 10, backgroundColor: '#6B7280' }]} />
+        <View style={[styles.queuedCar, { bottom: 114, left: rightLaneCenter - 10, backgroundColor: '#2563EB' }]} /> {/* User car - blue */}
+        <View style={[styles.queuedCar, { bottom: 142, left: rightLaneCenter - 10, backgroundColor: '#9CA3AF' }]} />
+        <View style={[styles.queuedCar, { bottom: 170, left: rightLaneCenter - 10, backgroundColor: '#D1D5DB' }]} />
+        <View style={[styles.queuedCar, { bottom: 198, left: rightLaneCenter - 10, backgroundColor: '#6B7280' }]} />
+        <View style={[styles.queuedCar, { bottom: 226, left: rightLaneCenter - 10, backgroundColor: '#9CA3AF' }]} />
+
+        {/* Cars approaching gates from lanes - with gaps */}
+        <View style={[styles.queuedCar, { bottom: 260, left: leftLaneCenter - 10, backgroundColor: '#6B7280' }]} />
+        <View style={[styles.queuedCar, { bottom: 270, left: rightLaneCenter - 10, backgroundColor: '#D1D5DB' }]} />
+        <View style={[styles.queuedCar, { bottom: 290, left: leftLaneCenter - 10, backgroundColor: '#9CA3AF' }]} />
+
+        {/* Starting Line Label */}
+        <View style={styles.startingLineContainer}>
+          <Text style={[styles.startingLineText, { color: theme.colors.textSecondary }]}>
+            Starting Line
+          </Text>
         </View>
       </View>
     );
@@ -283,75 +279,7 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
     return gateSpacing * gateNumber - (gateSpacing / 2);
   };
 
-  const renderCar = (car: SimulatedCar, index: number) => {
-    const animatedStyle = car.isUserCar ? {
-      transform: [{
-        translateY: animationRef.current.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -3],
-        }),
-      }],
-    } : {};
-
-    const iconSize = car.type === 'motorcycle' ? 24 : car.type === 'truck' ? 32 : 28;
-    const lanePosition = getLanePosition(car.lane);
-    
-    // Calculate splitting behavior near the border
-    let finalLeft = lanePosition;
-    
-    if (car.position > 80 && car.gateNumber) {
-      // Phase 1: Prepare to split (80-90%)
-      if (car.position <= 90) {
-        const prepareProgress = (car.position - 80) / 10; // 0 to 1
-        // Slight movement toward gate direction
-        const gatePosition = getGatePosition(car.gateNumber);
-        const preparationOffset = (gatePosition - lanePosition) * 0.2 * prepareProgress;
-        finalLeft = lanePosition + preparationOffset;
-      }
-      // Phase 2: Active splitting (90-95%)
-      else if (car.position <= 95) {
-        const splitProgress = (car.position - 90) / 5; // 0 to 1
-        const gatePosition = getGatePosition(car.gateNumber);
-        finalLeft = lanePosition + (gatePosition - lanePosition) * splitProgress;
-      }
-      // Phase 3: Aligned with gate (95%+)
-      else {
-        finalLeft = getGatePosition(car.gateNumber);
-      }
-    }
-
-    return (
-      <Animated.View
-        key={car.id}
-        style={[
-          styles.vehicle,
-          {
-            bottom: (car.position / 100) * 350 + 90, // More space for the simulation
-            left: finalLeft - (iconSize / 2), // Center the icon based on its size
-          },
-          animatedStyle,
-        ]}
-      >
-        <MaterialIcons 
-          name={getCarIcon(car.type)} 
-          size={iconSize} 
-          color={car.color}
-        />
-        {car.isUserCar && (
-          <View style={[styles.userBadge, { backgroundColor: theme.colors.accent }]}>
-            <Text style={[styles.userBadgeText, { color: 'white' }]}>YOU</Text>
-          </View>
-        )}
-        {car.position > 80 && (
-          <View style={[styles.gateBadge, { backgroundColor: theme.colors.warning }]}>
-            <Text style={[styles.gateBadgeText, { color: 'white' }]}>
-              G{car.gateNumber}
-            </Text>
-          </View>
-        )}
-      </Animated.View>
-    );
-  };
+  // Simplified car rendering - cars are now rendered as circles in the lane lines
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -361,7 +289,7 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <MaterialIcons name="arrow-back" size={24} color={theme.colors.text} />
+          <Icon name="chevron-right" size={24} color={theme.colors.text} />
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
@@ -382,7 +310,7 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
         {/* Statistics Cards */}
         <View style={styles.statsContainer}>
           <View style={[styles.statCard, { backgroundColor: theme.colors.card }]}>
-            <MaterialIcons name="queue" size={24} color={theme.colors.accent} />
+            <Icon name="cars-multiple" size={24} color={theme.colors.accent} />
             <Text style={[styles.statNumber, { color: theme.colors.text }]}>
               {getPositionText()}
             </Text>
@@ -392,7 +320,7 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
           </View>
           
           <View style={[styles.statCard, { backgroundColor: theme.colors.card }]}>
-            <MaterialIcons name="schedule" size={24} color={theme.colors.warning} />
+            <Icon name="clock" size={24} color={theme.colors.warning} />
             <Text style={[styles.statNumber, { color: theme.colors.text }]}>
               {getEstimatedWaitTime()}
             </Text>
@@ -402,7 +330,7 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
           </View>
           
           <View style={[styles.statCard, { backgroundColor: theme.colors.card }]}>
-            <MaterialIcons name="directions-car" size={24} color={theme.colors.success} />
+            <Icon name="car" size={24} color={theme.colors.success} />
             <Text style={[styles.statNumber, { color: theme.colors.text }]}>
               {lane.vehicle_count}
             </Text>
@@ -414,21 +342,51 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
 
         {/* Lane Simulation */}
         <View style={[styles.simulationCard, { backgroundColor: theme.colors.card }]}>
-          <Text style={[styles.simulationTitle, { color: theme.colors.text }]}>
-            Live Lane View
-          </Text>
-          
+ 
           <View style={styles.simulationContainer}>
-            {renderLaneLines()}
             {renderBorderGate()}
-            {cars.map(renderCar)}
+            {renderLaneLines()}
+            
+            {/* Side Facility Labels */}
+            <View style={styles.facilitiesContainer}>
+              <View style={styles.facilityLabel}>
+                <Text style={[styles.facilityText, { color: theme.colors.textSecondary }]}>
+                  Mexican Dealer
+                </Text>
+              </View>
+              <View style={styles.facilityLabel}>
+                <Text style={[styles.facilityText, { color: theme.colors.textSecondary }]}>
+                  City Park
+                </Text>
+              </View>
+              <View style={styles.facilityLabel}>
+                <Text style={[styles.facilityText, { color: theme.colors.textSecondary }]}>
+                  Government Building
+                </Text>
+              </View>
+              <View style={styles.facilityLabel}>
+                <Text style={[styles.facilityText, { color: theme.colors.textSecondary }]}>
+                  Gas Station
+                </Text>
+              </View>
+              <View style={styles.facilityLabel}>
+                <Text style={[styles.facilityText, { color: theme.colors.textSecondary }]}>
+                  Business Name
+                </Text>
+              </View>
+              <View style={styles.facilityLabel}>
+                <Text style={[styles.facilityText, { color: theme.colors.textSecondary }]}>
+                  Business Name
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
         {/* Last Car Location */}
         <View style={[styles.locationCard, { backgroundColor: theme.colors.card }]}>
           <View style={styles.locationHeader}>
-            <MaterialIcons name="place" size={24} color={theme.colors.error} />
+            <Icon name="location" size={24} color={theme.colors.error} />
             <Text style={[styles.locationTitle, { color: theme.colors.text }]}>
               End of Queue
             </Text>
@@ -442,7 +400,7 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
           <TouchableOpacity 
             style={[styles.navigationButton, { backgroundColor: theme.colors.accent }]}
           >
-            <MaterialIcons name="navigation" size={20} color="white" />
+            <Icon name="chevron-right" size={20} color="white" />
             <Text style={styles.navigationText}>Navigate to Queue End</Text>
           </TouchableOpacity>
         </View>
@@ -492,11 +450,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 10,
   },
   statsContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 10,
     gap: 12,
   },
   statCard: {
@@ -521,7 +479,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   simulationCard: {
-    padding: 20,
+    padding: 10,
     borderRadius: 16,
     marginBottom: 20,
     shadowColor: '#000',
@@ -537,7 +495,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   simulationContainer: {
-    height: 450,
+    height: 400, // Reduced height for better proportions
     position: 'relative',
   },
   laneContainer: {
@@ -602,36 +560,100 @@ const styles = StyleSheet.create({
     top: 10,
     left: 0,
     right: 0,
-    height: 80,
+    height: 180,
+    alignItems: 'center',
   },
-  borderLine: {
-    height: 4,
-    width: '100%',
-    marginBottom: 8,
+  usInspectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   inspectionGates: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
-    marginBottom: 8,
+    width: '85%',
+    marginBottom: 20,
+  },
+  gateColumn: {
+    alignItems: 'center',
+  },
+  gateLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    marginBottom: 6,
   },
   gate: {
-    width: 60,
-    height: 40,
-    borderRadius: 8,
+    width: 40,
+    height: 25,
+    borderRadius: 4,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#ccc',
+    justifyContent: 'flex-end',
+    paddingBottom: 4,
+    position: 'relative',
   },
-  gateNumber: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 2,
+  gateCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    position: 'absolute',
+    bottom: -25,
   },
-  borderLabel: {
-    textAlign: 'center',
+  gateAreaCars: {
+    position: 'absolute',
+    top: 60,
+    left: 0,
+    right: 0,
+    height: 100,
+  },
+  gateCarPosition: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  laneVerticalLine: {
+    position: 'absolute',
+    width: 2,
+    height: '55%',
+    top: '35%',
+  },
+  queuedCar: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  startingLineContainer: {
+    position: 'absolute',
+    bottom: 15,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  startingLineText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
+  },
+  facilitiesContainer: {
+    position: 'absolute',
+    left: 60, // Moved much closer to the lanes
+    top: '40%',
+    bottom: '15%',
+    width: 80,
+    justifyContent: 'space-between',
+  },
+  facilityLabel: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  facilityText: {
+    fontSize: 10,
+    fontWeight: '400',
+    transform: [{ rotate: '-45deg' }], // Diagonal rotation like in photo
+    textAlign: 'center',
+    width: 270,
   },
   vehicle: {
     position: 'absolute',

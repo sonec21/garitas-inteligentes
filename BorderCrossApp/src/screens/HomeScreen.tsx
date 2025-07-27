@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
-import MaterialDesignIcons from 'react-native-vector-icons/MaterialIcons';
+import Icon from '../components/Icon';
 import { BorderCrossing, Lane } from '../types';
 import { GaritaService } from '../services/borderService';
 import { useTheme } from '../context/ThemeContext';
@@ -27,9 +27,19 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   const loadCrossings = useCallback(async () => {
     console.log('🏠 HomeScreen.loadCrossings called');
     setLoading(true);
+    
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Loading timeout reached, stopping loader');
+      setLoading(false);
+      setCrossings([]);
+    }, 10000); // 10 second timeout
+    
     try {
       console.log('📡 Fetching data from Supabase...');
       const data = await GaritaService.getBorderCrossings();
+
+      clearTimeout(timeoutId); // Clear timeout since we got a response
 
       if (data && data.length > 0) {
         console.log(
@@ -37,12 +47,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           data.length,
           'crossings',
         );
+        console.log('📋 First crossing data:', JSON.stringify(data[0], null, 2));
         setCrossings(data);
       } else {
-        console.log('⚠️ No data from Supabase');
+        console.log('⚠️ No data from Supabase, received:', data);
         setCrossings([]);
       }
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error('❌ Error loading crossings:', error);
       console.log('🔄 Displaying no data due to error');
       setCrossings([]);
@@ -109,11 +121,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               {lane.traffic_flow}
             </Text>
           </View>
-          <MaterialDesignIcons 
+          <Icon 
             name="chevron-right" 
             size={20} 
             color={theme.colors.textTertiary}
-            style={styles.chevronIcon}
           />
         </View>
       </View>
@@ -125,7 +136,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               { backgroundColor: theme.colors.accent + '20' },
             ]}
           >
-            <MaterialDesignIcons
+            <Icon
               name="timer"
               size={28}
               color={theme.colors.accent}
@@ -147,8 +158,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               { backgroundColor: theme.colors.accent + '20' },
             ]}
           >
-            <MaterialDesignIcons
-              name="car-crash"
+            <Icon
+              name="car"
               size={28}
               color={theme.colors.accent}
             />

@@ -23,6 +23,7 @@ export async function updateDatabase(
 ) {
   let crossings_updated = 0;
   let lanes_updated = 0;
+  let old_lanes_cleaned = 0;
 
   for (const scrapedCrossing of scrapedData) {
     try {
@@ -72,70 +73,47 @@ export async function updateDatabase(
         crossings_updated++;
       }
 
-      // Update crossing status
+      // Update crossing status and last_updated timestamp
       await supabaseClient
         .from('border_crossings')
         .update({
           status: scrapedCrossing.status,
-          updated_at: new Date().toISOString(),
+          last_updated: new Date().toISOString(),
         })
         .eq('id', crossingId);
 
-      // Clean up old lanes that no longer exist
+      console.log(`✅ Updated crossing status for: ${scrapedCrossing.name}`);
+
+      // Batch upsert lanes for better performance
       if (scrapedCrossing.lanes.length > 0) {
-        const currentLaneNames = scrapedCrossing.lanes.map(l => l.name);
-        const { data: existingLanes } = await supabaseClient
+        console.log(`🚗 Upserting ${scrapedCrossing.lanes.length} lanes for ${scrapedCrossing.name}`);
+        
+        const lanesToUpsert = scrapedCrossing.lanes.map(lane => ({
+          crossing_id: crossingId,
+          name: lane.name,
+          type: lane.type,
+          status: lane.status,
+          wait_time: lane.wait_time,
+          vehicle_count: lane.vehicle_count,
+          lines_count: lane.lines_count,
+          traffic_flow: lane.traffic_flow,
+          updated_at: new Date().toISOString(),
+        }));
+
+        const { data: upsertResult, error: upsertError } = await supabaseClient
           .from('lanes')
-          .select('name')
-          .eq('crossing_id', crossingId);
-
-        if (existingLanes) {
-          const lanesToDelete = existingLanes
-            .filter(lane => !currentLaneNames.includes(lane.name))
-            .map(lane => lane.name);
-
-          if (lanesToDelete.length > 0) {
-            for (const laneName of lanesToDelete) {
-              await supabaseClient
-                .from('lanes')
-                .delete()
-                .eq('crossing_id', crossingId)
-                .eq('name', laneName);
-            }
-            console.log(`🗑️ Deleted ${lanesToDelete.length} old lanes`);
-          }
-        }
-      }
-
-      // Upsert current lanes
-      for (const lane of scrapedCrossing.lanes) {
-        console.log(
-          `🚗 Updating lane: ${lane.name} - ${lane.wait_time}min wait`,
-        );
-
-        const { error: upsertError } = await supabaseClient
-          .from('lanes')
-          .upsert(
-            {
-              crossing_id: crossingId,
-              name: lane.name,
-              type: lane.type,
-              status: lane.status,
-              wait_time: lane.wait_time,
-              vehicle_count: lane.vehicle_count,
-              lines_count: lane.lines_count,
-              traffic_flow: lane.traffic_flow,
-              updated_at: new Date().toISOString(),
-            },
-            {
-              onConflict: 'crossing_id,name',
-            },
-          );
+          .upsert(lanesToUpsert, {
+            onConflict: 'crossing_id,name',
+            ignoreDuplicates: false, // This ensures updates happen
+          })
+          .select('id');
 
         if (upsertError) {
-          console.warn(`⚠️ Error upserting lane ${lane.name}:`, upsertError);
+          console.error(`❌ Error batch upserting lanes for ${scrapedCrossing.name}:`, upsertError);
         } else {
-          lanes_updated++;
+          const upsertedCount = upsertResult?.length || 0;
+          lanes_updated += upsertedCount;
+          console.log(`✅ Successfully upserted ${upsertedCount} lanes for ${scrapedCrossing.name}`);
         }
       }
     } catch (error) {
@@ -146,8 +124,27 @@ export async function updateDatabase(
     }
   }
 
+  // Clean up old lane records (older than 1 hour)
+  console.log('🧹 Cleaning up old lane records...');
+  try {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: deletedCount, error: deleteError } = await supabaseClient
+      .from('lanes')
+      .delete({ count: 'exact' })
+      .lt('updated_at', oneHourAgo);
+
+    if (deleteError) {
+      console.error('❌ Error cleaning old lanes:', deleteError);
+    } else {
+      old_lanes_cleaned = deletedCount || 0;
+      console.log(`🗑️ Cleaned up ${old_lanes_cleaned} old lane records`);
+    }
+  } catch (error) {
+    console.error('❌ Error in cleanup process:', error);
+  }
+
   console.log(
-    `✅ Database update complete: ${crossings_updated} crossings, ${lanes_updated} lanes updated`,
+    `✅ Database update complete: ${crossings_updated} crossings, ${lanes_updated} lanes updated, ${old_lanes_cleaned} old lanes cleaned`,
   );
-  return { crossings_updated, lanes_updated };
+  return { crossings_updated, lanes_updated, old_lanes_cleaned };
 }
