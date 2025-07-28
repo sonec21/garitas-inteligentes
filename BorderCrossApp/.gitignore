@@ -78,3 +78,16 @@ yarn-error.log
 .env
 .env.local
 .env.*.local
+
+# Sensitive configuration files
+src/config/supabase.ts
+src/config/maps.ts
+supabase/config.toml
+ios/.xcode.env
+android/app/debug.keystore
+
+# API Keys and secrets
+**/google-services.json
+**/GoogleService-Info.plist
+**/*key*.json
+**/*secret*.json
