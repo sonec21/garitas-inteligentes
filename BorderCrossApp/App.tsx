@@ -5,10 +5,10 @@ import { StatusBar, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppNavigator from './src/navigation/AppNavigator';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import { debugEnvironment } from './src/utils/debugEnv';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
-// Debug environment variables on app start
-debugEnvironment();
+// Debug disabled for now since @env is not working
+console.log('🚀 Garita Inteligente app starting...');
 
 const styles = StyleSheet.create({
   container: {
@@ -33,9 +33,11 @@ const AppContent: React.FC = () => {
 
 function App(): React.JSX.Element {
   return (
-    <ThemeProvider>
-      <AppContent />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
