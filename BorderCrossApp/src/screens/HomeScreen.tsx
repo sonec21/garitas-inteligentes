@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
-import Icon from '../components/Icon';
+import ModernIcon, { icons } from '../components/ModernIcon';
 import { BorderCrossing, Lane } from '../types';
 import { GaritaService } from '../services/borderService';
 import { useTheme } from '../context/ThemeContext';
@@ -121,10 +121,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               {lane.traffic_flow}
             </Text>
           </View>
-          <Icon 
-            name="chevron-right" 
+          <ModernIcon 
+            name="chevron-forward-outline" 
             size={20} 
             color={theme.colors.textTertiary}
+            family="ionicons"
           />
         </View>
       </View>
@@ -136,10 +137,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               { backgroundColor: theme.colors.accent + '20' },
             ]}
           >
-            <Icon
-              name="timer"
+            <ModernIcon
+              name="timer-outline"
               size={28}
               color={theme.colors.accent}
+              family="ionicons"
             />
           </View>
           <Text
@@ -158,10 +160,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               { backgroundColor: theme.colors.accent + '20' },
             ]}
           >
-            <Icon
-              name="car"
+            <ModernIcon
+              name="car-outline"
               size={28}
               color={theme.colors.accent}
+              family="ionicons"
             />
           </View>
           <Text

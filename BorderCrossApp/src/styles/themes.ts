@@ -19,6 +19,11 @@ export interface Theme {
     tabBarActive: string;
     tabBarInactive: string;
     statusBar: 'light-content' | 'dark-content';
+    disabled: string;
+    gradient: {
+      primary: string[];
+      secondary: string[];
+    };
   };
   spacing: {
     xs: number;
@@ -55,25 +60,30 @@ export interface Theme {
 
 export const lightTheme: Theme = {
   colors: {
-    primary: '#007AFF',
-    background: '#FFFFFF',
-    surface: '#F8F9FA',
+    primary: '#4A9EFF',
+    background: '#F8F9FA',
+    surface: '#FFFFFF',
     card: '#FFFFFF',
-    text: '#1C1C1E',
+    text: '#1A1A1A',
     textSecondary: '#6B7280',
     textTertiary: '#9CA3AF',
     border: '#E5E7EB',
-    notification: '#FF3B30',
-    accent: '#007AFF',
-    success: '#34C759',
-    warning: '#FF9500',
-    error: '#FF3B30',
+    notification: '#FF6B6B',
+    accent: '#4A9EFF',
+    success: '#4ECDC4',
+    warning: '#FFD93D',
+    error: '#FF6B6B',
     shadow: '#000000',
     overlay: 'rgba(0, 0, 0, 0.4)',
     tabBar: '#FFFFFF',
-    tabBarActive: '#007AFF',
+    tabBarActive: '#4A9EFF',
     tabBarInactive: '#8E8E93',
     statusBar: 'dark-content',
+    disabled: '#D1D5DB',
+    gradient: {
+      primary: ['#4A9EFF', '#6BB6FF'],
+      secondary: ['#1A1A1A', '#2A2A2A'],
+    },
   },
   spacing: {
     xs: 4,
@@ -110,25 +120,30 @@ export const lightTheme: Theme = {
 
 export const darkTheme: Theme = {
   colors: {
-    primary: '#0A84FF',
-    background: '#000000',
-    surface: '#1C1C1E',
-    card: '#2C2C2E',
+    primary: '#4A9EFF',
+    background: '#0F0F0F',
+    surface: '#1A1A1A',
+    card: '#1E1E1E',
     text: '#FFFFFF',
-    textSecondary: '#AEAEB2',
-    textTertiary: '#8E8E93',
-    border: '#38383A',
-    notification: '#FF453A',
-    accent: '#0A84FF',
-    success: '#32D74B',
-    warning: '#FF9F0A',
-    error: '#FF453A',
+    textSecondary: '#A6A6A6',
+    textTertiary: '#666666',
+    border: '#2A2A2A',
+    notification: '#FF6B6B',
+    accent: '#4A9EFF',
+    success: '#4ECDC4',
+    warning: '#FFD93D',
+    error: '#FF6B6B',
     shadow: '#000000',
-    overlay: 'rgba(0, 0, 0, 0.6)',
-    tabBar: '#1C1C1E',
-    tabBarActive: '#0A84FF',
-    tabBarInactive: '#8E8E93',
+    overlay: 'rgba(0, 0, 0, 0.8)',
+    tabBar: '#0F0F0F',
+    tabBarActive: '#4A9EFF',
+    tabBarInactive: '#666666',
     statusBar: 'light-content',
+    disabled: '#3A3A3A',
+    gradient: {
+      primary: ['#4A9EFF', '#6BB6FF'],
+      secondary: ['#1E1E1E', '#2A2A2A'],
+    },
   },
   spacing: {
     xs: 4,

@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import PlacesService, { BorderCrossingLocation } from '../services/PlacesService';
+import ModernIcon from './ModernIcon';
+import ModernButton from './ModernButton';
 
 interface CityGaritasViewProps {
   userLocation: { latitude: number; longitude: number };
@@ -158,8 +160,8 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
           <Text style={[styles.loadingText, { color: theme.colors.text }]}>
             Detecting your location...
           </Text>
-          <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
+          <ModernButton
+            title="Skip & Use Default Location"
             onPress={() => {
               setLoadingCity(false);
               setUserCity('San Diego');
@@ -167,9 +169,11 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
               const fallbackCrossings = PlacesService.getCrossingsWithRecommendations(userLocation);
               setCrossings(fallbackCrossings);
             }}
-          >
-            <Text style={styles.retryButtonText}>Skip & Use Default Location</Text>
-          </TouchableOpacity>
+            variant="primary"
+            size="medium"
+            icon="location-outline"
+            iconFamily="ionicons"
+          />
         </View>
       </View>
     );
@@ -181,16 +185,22 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.colors.text }]}>
-          🏛️ Border Crossings Near You
-        </Text>
+        <View style={styles.titleContainer}>
+          <ModernIcon name="location-outline" size={28} color={theme.colors.primary} family="ionicons" />
+          <Text style={[styles.title, { color: theme.colors.text }]}>
+            Border Crossings
+          </Text>
+        </View>
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          📍 Your location: {userCity}
+          Your location: {userCity}
         </Text>
         {error && (
-          <Text style={[styles.errorText, { color: '#FF9800' }]}>
-            ⚠️ {error}
-          </Text>
+          <View style={styles.errorContainer}>
+            <ModernIcon name="warning-outline" size={14} color="#FFD93D" family="ionicons" />
+            <Text style={[styles.errorText, { color: '#FFD93D' }]}>
+              {error}
+            </Text>
+          </View>
         )}
         <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
           Sorted by distance • Closest first
@@ -208,6 +218,7 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
               styles.crossingCard,
               { 
                 backgroundColor: theme.colors.card,
+                borderColor: theme.colors.border,
               }
             ]}
             onPress={() => handleCrossingPress(crossing)}
@@ -246,35 +257,49 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
 
             {/* Wait Time - Main Focus */}
             <View style={[styles.waitTimeContainer, { backgroundColor: `${getWaitTimeColor(crossing.averageWaitTime)}20` }]}>
-              <Text style={[styles.waitTimeLabel, { color: theme.colors.textSecondary }]}>
-                Current Wait Time
-              </Text>
-              <Text style={[
-                styles.waitTimeValue,
-                { color: getWaitTimeColor(crossing.averageWaitTime) }
-              ]}>
-                {crossing.averageWaitTime} minutes
-              </Text>
+              <View style={styles.waitTimeContent}>
+                <ModernIcon name="time-outline" size={20} color={getWaitTimeColor(crossing.averageWaitTime)} family="ionicons" />
+                <View style={styles.waitTimeText}>
+                  <Text style={[styles.waitTimeLabel, { color: theme.colors.textSecondary }]}>
+                    Current Wait Time
+                  </Text>
+                  <Text style={[
+                    styles.waitTimeValue,
+                    { color: getWaitTimeColor(crossing.averageWaitTime) }
+                  ]}>
+                    {crossing.averageWaitTime} minutes
+                  </Text>
+                </View>
+                <View style={[styles.waitTimeCircle, { 
+                  backgroundColor: getWaitTimeColor(crossing.averageWaitTime),
+                  borderColor: getWaitTimeColor(crossing.averageWaitTime) 
+                }]}>
+                  <Text style={styles.waitTimeCircleText}>{crossing.averageWaitTime}</Text>
+                </View>
+              </View>
             </View>
 
             {/* Quick Stats */}
             <View style={styles.quickStats}>
               <View style={styles.statItem}>
-                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>🚗 Lanes</Text>
+                <ModernIcon name="car-outline" size={16} color={theme.colors.textSecondary} family="ionicons" />
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Lanes</Text>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>
                   {crossing.waitingLines?.length || 0}
                 </Text>
               </View>
               
               <View style={styles.statItem}>
-                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>🕒 Hours</Text>
+                <ModernIcon name="time-outline" size={16} color={theme.colors.textSecondary} family="ionicons" />
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Hours</Text>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>
                   {crossing.operatingHours.is24Hours ? '24/7' : `${crossing.operatingHours.open}-${crossing.operatingHours.close}`}
                 </Text>
               </View>
               
               <View style={styles.statItem}>
-                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>📍 Last Car</Text>
+                <ModernIcon name="location-outline" size={16} color={theme.colors.textSecondary} family="ionicons" />
+                <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Last Car</Text>
                 <Text style={[styles.statValue, { color: theme.colors.text }]}>
                   {crossing.lastCarPosition 
                     ? `${Math.floor((Date.now() - crossing.lastCarPosition.timestamp.getTime()) / 60000)}m ago`
@@ -330,32 +355,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
   },
-  retryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   header: {
     marginBottom: 20,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
     marginBottom: 4,
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
   errorText: {
     fontSize: 12,
-    marginBottom: 4,
     fontStyle: 'italic',
   },
   crossingCard: {
@@ -415,7 +439,14 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
+  },
+  waitTimeContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  waitTimeText: {
+    flex: 1,
   },
   waitTimeLabel: {
     fontSize: 12,
@@ -423,6 +454,19 @@ const styles = StyleSheet.create({
   },
   waitTimeValue: {
     fontSize: 20,
+    fontWeight: '700',
+  },
+  waitTimeCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waitTimeCircleText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '700',
   },
   quickStats: {
@@ -433,6 +477,7 @@ const styles = StyleSheet.create({
   statItem: {
     flex: 1,
     alignItems: 'center',
+    gap: 4,
   },
   statLabel: {
     fontSize: 10,

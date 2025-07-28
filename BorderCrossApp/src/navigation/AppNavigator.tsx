@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Text, View } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import ModernIcon, { icons } from '../components/ModernIcon';
 
 import HomeScreen from '../screens/HomeScreen';
 import MapScreen from '../screens/MapScreen';
@@ -16,186 +17,33 @@ const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 const getTabBarIcon = (route: any, focused: boolean, color: string, size: number) => {
-  const iconSize = size - 2;
-  const strokeWidth = focused ? 2.5 : 2;
+  let iconName = 'home';
   
-  const renderHomeIcon = () => (
-    <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'relative', width: iconSize * 0.8, height: iconSize * 0.8 }}>
-        {/* House roof */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          transform: [{ translateX: -iconSize * 0.3 }],
-          width: 0,
-          height: 0,
-          borderLeftWidth: iconSize * 0.3,
-          borderRightWidth: iconSize * 0.3,
-          borderBottomWidth: iconSize * 0.25,
-          borderLeftColor: 'transparent',
-          borderRightColor: 'transparent',
-          borderBottomColor: color,
-        }} />
-        {/* House base */}
-        <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: '15%',
-          width: '70%',
-          height: '50%',
-          borderWidth: strokeWidth,
-          borderColor: color,
-          backgroundColor: 'transparent',
-        }} />
-        {/* Door */}
-        <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: '40%',
-          width: '20%',
-          height: '35%',
-          borderTopWidth: strokeWidth,
-          borderLeftWidth: strokeWidth,
-          borderRightWidth: strokeWidth,
-          borderColor: color,
-          backgroundColor: 'transparent',
-        }} />
-      </View>
-    </View>
-  );
-  
-  const renderMapIcon = () => (
-    <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'relative', width: iconSize * 0.7, height: iconSize * 0.9 }}>
-        {/* Location pin shape */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '70%',
-          borderRadius: iconSize * 0.35,
-          borderWidth: strokeWidth,
-          borderColor: color,
-          backgroundColor: 'transparent',
-        }} />
-        {/* Center dot */}
-        <View style={{
-          position: 'absolute',
-          top: '20%',
-          left: '30%',
-          width: '40%',
-          height: '30%',
-          borderRadius: iconSize * 0.15,
-          backgroundColor: color,
-        }} />
-        {/* Bottom point */}
-        <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: '50%',
-          transform: [{ translateX: -iconSize * 0.05 }],
-          width: 0,
-          height: 0,
-          borderLeftWidth: iconSize * 0.1,
-          borderRightWidth: iconSize * 0.1,
-          borderTopWidth: iconSize * 0.2,
-          borderLeftColor: 'transparent',
-          borderRightColor: 'transparent',
-          borderTopColor: color,
-        }} />
-      </View>
-    </View>
-  );
-  
-  const renderChatIcon = () => (
-    <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'relative', width: iconSize * 0.8, height: iconSize * 0.7 }}>
-        {/* Chat bubble */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '75%',
-          borderRadius: iconSize * 0.15,
-          borderWidth: strokeWidth,
-          borderColor: color,
-          backgroundColor: 'transparent',
-        }} />
-        {/* Chat tail */}
-        <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: '20%',
-          width: 0,
-          height: 0,
-          borderTopWidth: iconSize * 0.15,
-          borderTopColor: color,
-          borderLeftWidth: iconSize * 0.1,
-          borderLeftColor: 'transparent',
-          borderRightWidth: iconSize * 0.1,
-          borderRightColor: 'transparent',
-        }} />
-      </View>
-    </View>
-  );
-  
-  const renderProfileIcon = () => (
-    <View style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{ position: 'relative', width: iconSize * 0.8, height: iconSize * 0.8 }}>
-        {/* Head circle */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: '25%',
-          width: '50%',
-          height: '45%',
-          borderRadius: iconSize * 0.2,
-          borderWidth: strokeWidth,
-          borderColor: color,
-          backgroundColor: 'transparent',
-        }} />
-        {/* Body/shoulders */}
-        <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: '10%',
-          width: '80%',
-          height: '50%',
-          borderTopLeftRadius: iconSize * 0.3,
-          borderTopRightRadius: iconSize * 0.3,
-          borderWidth: strokeWidth,
-          borderColor: color,
-          backgroundColor: 'transparent',
-          borderBottomWidth: 0,
-        }} />
-      </View>
-    </View>
-  );
-
-  let IconComponent;
   switch (route.name) {
     case 'Home':
-      IconComponent = renderHomeIcon;
+      iconName = focused ? 'home' : 'home-outline';
       break;
     case 'Map':
-      IconComponent = renderMapIcon;
+      iconName = focused ? 'map' : 'map-outline';
       break;
     case 'Chat':
-      IconComponent = renderChatIcon;
+      iconName = focused ? 'chatbubble' : 'chatbubble-outline';
       break;
     case 'Profile':
-      IconComponent = renderProfileIcon;
+      iconName = focused ? 'person' : 'person-outline';
       break;
     default:
-      IconComponent = renderHomeIcon;
+      iconName = focused ? 'home' : 'home-outline';
   }
 
   return (
     <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <IconComponent />
+      <ModernIcon 
+        name={iconName} 
+        size={size} 
+        color={color} 
+        family="ionicons"
+      />
       {focused && (
         <View 
           style={{
@@ -231,17 +79,26 @@ const MainTabs = () => {
         tabBarInactiveTintColor: theme.colors.tabBarInactive,
         tabBarStyle: {
           backgroundColor: theme.colors.tabBar,
-          borderTopWidth: 0,
-          elevation: 0,
-          shadowOpacity: 0,
+          borderTopWidth: 0.5,
+          borderTopColor: theme.colors.border,
+          elevation: 8,
+          shadowColor: theme.colors.shadow,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
           height: 90,
           paddingTop: 10,
           paddingBottom: 30,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-          marginTop: 4,
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
         },
         headerShown: false,
       })}
