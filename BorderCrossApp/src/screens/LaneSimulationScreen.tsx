@@ -12,6 +12,7 @@ import {
 import Icon from '../components/Icon';
 import { BorderCrossing, Lane } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import PlacesService, { BorderCrossingLocation } from '../services/PlacesService';
 
 interface LaneSimulationScreenProps {
   route: {
@@ -50,20 +51,98 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
   const [cars, setCars] = useState<SimulatedCar[]>([]);
   const [userPosition, setUserPosition] = useState(0);
   const [lastCarLocation, setLastCarLocation] = useState('');
+  const [queueData, setQueueData] = useState<{
+    vehicleCount: number;
+    queueEndLocation: { 
+      latitude: number; 
+      longitude: number; 
+      nearbyLandmark?: string; 
+      landmarkDetails?: {
+        landmarkName: string;
+        distance: number;
+        direction: 'before' | 'after';
+        distanceText: string;
+        fullDescription: string;
+        exactLocation?: {
+          closestBuilding: string;
+          buildingDistance: number;
+          buildingDistanceText: string;
+          streetAddress: string;
+        };
+      };
+      estimatedDistance: number;
+    } | null;
+    lastCarTimestamp: Date;
+    trafficLevel: 'light' | 'moderate' | 'heavy' | 'severe';
+  } | null>(null);
+  const [loadingQueueData, setLoadingQueueData] = useState(true);
   const animationRef = useRef<Animated.Value>(new Animated.Value(0));
 
-  // Generate simulated cars based on lane traffic
+  // Generate simulated cars based on lane traffic and load real queue data
   useEffect(() => {
     generateSimulatedCars();
-    generateLastCarLocation();
+    loadRealTimeQueueData();
     startAnimation();
   }, [lane]);
+
+  // Update cars when queue data changes
+  useEffect(() => {
+    if (queueData) {
+      generateSimulatedCars();
+    }
+  }, [queueData]);
+
+  const loadRealTimeQueueData = async () => {
+    setLoadingQueueData(true);
+    try {
+      // Convert lane data to BorderCrossingLocation format
+      const borderCrossing: BorderCrossingLocation = {
+        id: crossing.id,
+        name: crossing.name,
+        city: 'Tijuana', // Default city
+        placeId: `crossing-${crossing.id}`,
+        coordinate: {
+          latitude: 32.5422, // San Ysidro coordinates as default
+          longitude: -117.0307
+        },
+        address: crossing.name,
+        waitingLines: [],
+        operatingHours: {
+          open: '00:00',
+          close: '23:59',
+          is24Hours: true
+        },
+        gateStatus: 'open',
+        averageWaitTime: lane.wait_time
+      };
+
+      console.log('🔄 Loading real-time queue data...');
+      const realTimeData = await PlacesService.getRealTimeQueueData(borderCrossing);
+      setQueueData(realTimeData);
+
+      if (realTimeData.queueEndLocation?.nearbyLandmark) {
+        setLastCarLocation(realTimeData.queueEndLocation.nearbyLandmark);
+        console.log('📍 Queue end location:', realTimeData.queueEndLocation.nearbyLandmark);
+      } else {
+        setLastCarLocation('Unable to determine exact location');
+      }
+    } catch (error) {
+      console.error('Error loading real-time queue data:', error);
+      // Fallback to mock data
+      generateLastCarLocation();
+    } finally {
+      setLoadingQueueData(false);
+    }
+  };
 
   const generateSimulatedCars = () => {
     // Calculate available space: simulation height (450px) - gate area (180px) - starting line (50px) = 220px
     // Each car needs 40px spacing, so max cars = 220px / 40px = 5.5, round down to 5
     const maxCarsPerLane = 5; // Conservative limit to prevent overlap
-    const totalCars = Math.min(lane.vehicle_count, 10); // Max 10 total (5 per lane)
+    
+    // Use real-time vehicle count if available, otherwise fallback to lane data
+    const realTimeVehicleCount = queueData?.vehicleCount || lane.vehicle_count;
+    const totalCars = Math.min(realTimeVehicleCount, 10); // Max 10 total (5 per lane)
     const carsData: SimulatedCar[] = [];
     
     const carColors = ['#6B7280', '#9CA3AF', '#D1D5DB']; // Grayscale like the screenshot
@@ -390,19 +469,175 @@ const LaneSimulationScreen: React.FC<LaneSimulationScreenProps> = ({
             <Text style={[styles.locationTitle, { color: theme.colors.text }]}>
               End of Queue
             </Text>
+            <TouchableOpacity 
+              onPress={loadRealTimeQueueData}
+              disabled={loadingQueueData}
+              style={styles.refreshButton}
+            >
+              <Icon 
+                name={loadingQueueData ? "loading" : "refresh"} 
+                size={20} 
+                color={theme.colors.primary} 
+              />
+            </TouchableOpacity>
           </View>
-          <Text style={[styles.locationText, { color: theme.colors.textSecondary }]}>
-            Last car in line is near:
-          </Text>
-          <Text style={[styles.locationAddress, { color: theme.colors.text }]}>
-            {lastCarLocation}
-          </Text>
-          <TouchableOpacity 
-            style={[styles.navigationButton, { backgroundColor: theme.colors.accent }]}
-          >
-            <Icon name="chevron-right" size={20} color="white" />
-            <Text style={styles.navigationText}>Navigate to Queue End</Text>
-          </TouchableOpacity>
+          
+          {loadingQueueData ? (
+            <View style={styles.loadingContainer}>
+              <Text style={[styles.locationText, { color: theme.colors.textSecondary }]}>
+                🔄 Getting real-time queue data...
+              </Text>
+            </View>
+          ) : (
+            <>
+              {queueData?.queueEndLocation?.landmarkDetails ? (
+                <>
+                  <Text style={[styles.locationText, { color: theme.colors.textSecondary }]}>
+                    Last car in line is located:
+                  </Text>
+                  
+                  {/* Unified Location Card */}
+                  <View style={styles.unifiedLocationCard}>
+                    {/* Wait Time Circle - Top Right */}
+                    <View style={styles.waitTimeCircle}>
+                      <Text style={[styles.waitTimeNumber, { color: '#fff' }]}>
+                        {lane.wait_time}
+                      </Text>
+                      <Text style={[styles.waitTimeLabel, { color: '#fff' }]}>
+                        min
+                      </Text>
+                    </View>
+                    
+                    {/* Exact Location */}
+                    {queueData.queueEndLocation.landmarkDetails.exactLocation ? (
+                      <View style={styles.exactLocationSection}>
+                        <Text style={[styles.exactLocationMain, { color: theme.colors.text }]}>
+                          🏢 {queueData.queueEndLocation.landmarkDetails.exactLocation.closestBuilding}
+                        </Text>
+                        <Text style={[styles.exactAddressMain, { color: theme.colors.textSecondary }]}>
+                          📍 {queueData.queueEndLocation.landmarkDetails.exactLocation.streetAddress}
+                        </Text>
+                        <Text style={[styles.exactDistanceMain, { color: theme.colors.primary }]}>
+                          {queueData.queueEndLocation.landmarkDetails.exactLocation.buildingDistanceText} from building
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.locationAddress, { color: theme.colors.text }]}>
+                        {queueData.queueEndLocation.landmarkDetails.fullDescription}
+                      </Text>
+                    )}
+                    
+                    {/* Divider */}
+                    <View style={styles.locationDivider} />
+                    
+                    {/* Popular Landmark Reference */}
+                    <View style={styles.landmarkReferenceSection}>
+                      <Text style={[styles.landmarkReferenceTitle, { color: theme.colors.text }]}>
+                        📍 Near: {queueData.queueEndLocation.landmarkDetails.landmarkName}
+                      </Text>
+                      
+                      <View style={styles.landmarkDetailsRow}>
+                        <View style={styles.landmarkDetail}>
+                          <Text style={[styles.landmarkDetailLabel, { color: theme.colors.textSecondary }]}>
+                            Distance
+                          </Text>
+                          <Text style={[styles.landmarkDetailValue, { color: theme.colors.text }]}>
+                            {queueData.queueEndLocation.landmarkDetails.distanceText}
+                          </Text>
+                        </View>
+                        
+                        <View style={styles.landmarkDetail}>
+                          <Text style={[styles.landmarkDetailLabel, { color: theme.colors.textSecondary }]}>
+                            Direction
+                          </Text>
+                          <Text style={[
+                            styles.landmarkDetailValue, 
+                            { 
+                              color: queueData.queueEndLocation.landmarkDetails.direction === 'before' 
+                                ? theme.colors.warning 
+                                : theme.colors.success 
+                            }
+                          ]}>
+                            {queueData.queueEndLocation.landmarkDetails.direction === 'before' ? 'Before' : 'Past'}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      <Text style={[styles.landmarkSummary, { color: theme.colors.textSecondary }]}>
+                        💡 {queueData.queueEndLocation.landmarkDetails.distanceText} {queueData.queueEndLocation.landmarkDetails.direction === 'before' ? 'south of' : 'north of'} {queueData.queueEndLocation.landmarkDetails.landmarkName}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.locationText, { color: theme.colors.textSecondary }]}>
+                    Last car in line is near:
+                  </Text>
+                  <Text style={[styles.locationAddress, { color: theme.colors.text }]}>
+                    {lastCarLocation}
+                  </Text>
+                </>
+              )}
+              
+              {queueData && (
+                <View style={styles.queueDetails}>
+                  <View style={styles.queueDetailRow}>
+                    <Text style={[styles.queueDetailLabel, { color: theme.colors.textSecondary }]}>
+                      🚗 Vehicles in queue:
+                    </Text>
+                    <Text style={[styles.queueDetailValue, { color: theme.colors.text }]}>
+                      {queueData.vehicleCount}
+                    </Text>
+                  </View>
+                  
+                  {queueData.queueEndLocation && (
+                    <View style={styles.queueDetailRow}>
+                      <Text style={[styles.queueDetailLabel, { color: theme.colors.textSecondary }]}>
+                        📏 Queue length:
+                      </Text>
+                      <Text style={[styles.queueDetailValue, { color: theme.colors.text }]}>
+                        {(queueData.queueEndLocation.estimatedDistance / 1000).toFixed(1)} km
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.queueDetailRow}>
+                    <Text style={[styles.queueDetailLabel, { color: theme.colors.textSecondary }]}>
+                      🚦 Traffic level:
+                    </Text>
+                    <Text style={[
+                      styles.queueDetailValue, 
+                      { 
+                        color: queueData.trafficLevel === 'light' ? theme.colors.success :
+                               queueData.trafficLevel === 'moderate' ? theme.colors.warning :
+                               theme.colors.error 
+                      }
+                    ]}>
+                      {queueData.trafficLevel.toUpperCase()}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.queueDetailRow}>
+                    <Text style={[styles.queueDetailLabel, { color: theme.colors.textSecondary }]}>
+                      🕒 Last updated:
+                    </Text>
+                    <Text style={[styles.queueDetailValue, { color: theme.colors.text }]}>
+                      {Math.floor((Date.now() - queueData.lastCarTimestamp.getTime()) / 60000)}m ago
+                    </Text>
+                  </View>
+                </View>
+              )}
+              
+              <TouchableOpacity 
+                style={[styles.navigationButton, { backgroundColor: theme.colors.accent }]}
+                disabled={!queueData?.queueEndLocation}
+              >
+                <Icon name="chevron-right" size={20} color="white" />
+                <Text style={styles.navigationText}>Navigate to Queue End</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -418,11 +653,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
   },
   backButton: {
     padding: 8,
@@ -462,11 +692,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
   statNumber: {
     fontSize: 24,
@@ -482,11 +707,6 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 16,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
   simulationTitle: {
     fontSize: 18,
@@ -692,21 +912,26 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
   locationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
   locationTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginLeft: 8,
+    flex: 1,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
   },
   locationText: {
     fontSize: 14,
@@ -729,6 +954,122 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  queueDetails: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 12,
+  },
+  queueDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  queueDetailLabel: {
+    fontSize: 14,
+    flex: 1,
+  },
+  queueDetailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  unifiedLocationCard: {
+    backgroundColor: 'rgba(76,175,80,0.12)',
+    borderRadius: 14,
+    padding: 18,
+    marginVertical: 12,
+    position: 'relative',
+  },
+  waitTimeCircle: {
+    position: 'absolute',
+    top: -8,
+    right: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FF6B35',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  waitTimeNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  waitTimeLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginTop: -2,
+  },
+  exactLocationSection: {
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+  exactLocationMain: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  exactAddressMain: {
+    fontSize: 14,
+    marginBottom: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  exactDistanceMain: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  locationDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    marginVertical: 12,
+  },
+  landmarkReferenceSection: {
+    paddingTop: 8,
+  },
+  landmarkReferenceTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  landmarkDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 10,
+  },
+  landmarkDetail: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  landmarkDetailLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  landmarkDetailValue: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  landmarkSummary: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 18,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    padding: 8,
+    borderRadius: 6,
   },
 });
 
