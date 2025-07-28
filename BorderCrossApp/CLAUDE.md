@@ -50,12 +50,33 @@ If you detect ANY of these patterns, you MUST:
 - **Environment variables for all secrets** - Never hardcode credentials
 - **Validate before committing** - Always scan for exposed secrets
 - **Question credential changes** - Ask before proceeding with any auth/config
+- **Use TodoWrite tool** - Track progress on complex multi-step tasks
+- **Follow existing patterns** - Check codebase conventions before implementing
 
 ### Project-Specific Context
-- React Native app with Google Maps integration
-- Supabase backend with API keys
-- iOS/Android native configuration
-- Environment variables managed through `.env` file
+- **Tech Stack**: React Native 0.80.1 with TypeScript
+- **Backend**: Supabase with real-time subscriptions
+- **Maps**: Google Maps Platform integration
+- **Icons**: react-native-vector-icons (Ionicons, MaterialIcons, Feather)
+- **Theme**: Modern dark design with flat UI (no 3D effects)
+- **Navigation**: Bottom tabs with modern styling
+- **State**: React Context for theme management
+- **Build**: iOS/Android with environment variable injection
+
+### Code Quality Standards
+- **No console.logs in production** - Use proper logging
+- **TypeScript strict mode** - Always type properly
+- **Error boundaries** - Handle React errors gracefully
+- **Loading states** - Always show loading indicators
+- **Accessibility** - Include proper labels and roles
+- **Performance** - Optimize renders and memory usage
+
+### Git & Deployment Practices
+- **Meaningful commits** - Clear, descriptive commit messages
+- **Branch protection** - Work on feature branches
+- **No force push** to main/master branches
+- **Clean history** - Squash when appropriate
+- **Documentation** - Update README when adding features
 
 ## 🔄 Remember These Past Issues
 
@@ -71,6 +92,59 @@ If you detect ANY of these patterns, you MUST:
 3. **Alert immediately** on any security risk detection
 4. **Use secure patterns** by default for all credential handling
 5. **Validate environment** setup before proceeding with sensitive operations
+6. **Use TodoWrite tool** for tracking complex multi-step tasks
+7. **Check existing code patterns** before implementing new features
+8. **Verify dependencies** are properly installed and configured
+9. **Test changes** thoroughly before committing
+10. **Update documentation** when adding new features or configurations
+
+## 🚀 Helpful Development Patterns
+
+### When Starting New Features
+- **Research existing code** - Look for similar implementations
+- **Plan the approach** - Break down into manageable steps
+- **Use TodoWrite** - Track progress on complex tasks
+- **Follow conventions** - Match existing naming and structure
+
+### When Fixing Issues
+- **Identify root cause** - Don't just treat symptoms
+- **Check dependencies** - Verify packages are properly linked
+- **Test incrementally** - Make small changes and verify
+- **Document solutions** - Help future debugging
+
+### When Working with Native Code
+- **Check platform-specific files** - iOS Info.plist, Android manifests
+- **Verify font/asset linking** - Ensure resources are properly configured
+- **Clean and rebuild** - Often fixes mysterious issues
+- **Check Xcode/Android Studio** - Native tools show better errors
+
+### Communication Best Practices
+- **Be concise but clear** - Avoid unnecessary explanations unless asked
+- **Show progress** - Use TodoWrite to demonstrate task completion
+- **Ask clarifying questions** - Better to ask than assume
+- **Acknowledge mistakes** - Learn from errors and improve
+
+## 🛠️ Common Task Patterns
+
+### For Icon/Asset Issues
+1. Check package installation and version compatibility
+2. Verify native linking (iOS fonts in Info.plist, Android resources)
+3. Check import statements and component usage
+4. Test with simple example first
+5. Clear cache and rebuild if needed
+
+### For API/Backend Issues
+🚨 **SECURITY ALERT FIRST** - Check for any exposed credentials
+1. Verify environment variables are properly loaded
+2. Check API endpoints and authentication
+3. Test with simple requests first
+4. Add proper error handling and loading states
+
+### For Styling/UI Issues
+1. Check theme context and color usage
+2. Verify component props and styling inheritance
+3. Test on different screen sizes and orientations
+4. Ensure accessibility standards are met
 
 ---
 
