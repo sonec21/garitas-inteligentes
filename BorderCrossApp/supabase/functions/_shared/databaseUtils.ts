@@ -50,14 +50,17 @@ export async function updateDatabase(
 
       if (!crossingId) {
         console.log(`🆕 Creating new crossing: ${scrapedCrossing.name}`);
+        const latitude = getDefaultLatitude(scrapedCrossing.name);
+        const longitude = getDefaultLongitude(scrapedCrossing.name);
+        console.log(`📍 Using STATIC coordinates for ${scrapedCrossing.name}: ${latitude}, ${longitude} (no Google API calls)`);
 
-        // Create new crossing if it doesn't exist
+        // Create new crossing if it doesn't exist - using STATIC coordinates only
         const { data: newCrossing, error: createError } = await supabaseClient
           .from('border_crossings')
           .insert({
             name: scrapedCrossing.name,
-            latitude: getDefaultLatitude(scrapedCrossing.name),
-            longitude: getDefaultLongitude(scrapedCrossing.name),
+            latitude,
+            longitude,
             status: scrapedCrossing.status,
             country_from: 'Mexico',
             country_to: 'USA',

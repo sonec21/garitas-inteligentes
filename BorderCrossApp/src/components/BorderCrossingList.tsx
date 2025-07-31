@@ -14,6 +14,7 @@ interface BorderCrossingListProps {
   crossings: BorderCrossingLocation[];
   onCrossingSelect: (crossing: BorderCrossingLocation) => void;
   onGetDirections: (crossing: BorderCrossingLocation) => void;
+  onViewOnMap: (crossing: BorderCrossingLocation) => void; // Added this line
   userLocation?: { latitude: number; longitude: number };
   loadingDirections?: string; // crossing id that's loading directions
 }
@@ -22,6 +23,7 @@ const BorderCrossingList: React.FC<BorderCrossingListProps> = ({
   crossings,
   onCrossingSelect,
   onGetDirections,
+  onViewOnMap,
   userLocation,
   loadingDirections,
 }) => {
@@ -84,7 +86,7 @@ const BorderCrossingList: React.FC<BorderCrossingListProps> = ({
       <View key={crossing.id} style={[styles.crossingItem, { backgroundColor: theme.colors.card }]}>
         <TouchableOpacity
           style={styles.crossingHeader}
-          onPress={() => onCrossingSelect(crossing)}
+          onPress={() => onViewOnMap(crossing)}
         >
           <View style={styles.crossingInfo}>
             <Text style={[styles.crossingName, { color: theme.colors.text }]}>
@@ -152,7 +154,7 @@ const BorderCrossingList: React.FC<BorderCrossingListProps> = ({
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => onCrossingSelect(crossing)}
+              onPress={() => onViewOnMap(crossing)}
             >
               <Text style={styles.actionButtonText}>📍 View on Map</Text>
             </TouchableOpacity>

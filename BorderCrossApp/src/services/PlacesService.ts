@@ -1,4 +1,6 @@
-import { GOOGLE_PLACES_API_KEY } from '@env';
+import { GOOGLE_MAPS_API_KEY } from '../config/maps';
+import { getApiLimits, getCurrentEnvironment, EMERGENCY_API_STOP, DEV_WARNINGS } from '../config/apiConfig';
+import { STATIC_BORDER_CROSSINGS, convertToPlacesServiceFormat, findCrossingByName } from '../config/borderCrossings';
 
 export interface BorderCrossingLocation {
   id: string;
@@ -74,12 +76,85 @@ export interface PlaceDetails {
 class PlacesService {
   private readonly apiKey: string;
   private readonly baseUrl = 'https://maps.googleapis.com/maps/api/place';
+  private readonly environment = getCurrentEnvironment();
+  private readonly apiLimits = getApiLimits();
+  
+  // API call tracking and limits
+  private apiCallCount = 0;
+  private readonly apiCallCache = new Map<string, { data: any; timestamp: number }>();
+  private dailyCostEstimate = 0;
 
   constructor() {
-    this.apiKey = GOOGLE_PLACES_API_KEY;
+    this.apiKey = GOOGLE_MAPS_API_KEY;
     if (!this.apiKey) {
       console.warn('⚠️ Google Places API key not found');
     }
+    
+    // Reset API call counter every hour
+    setInterval(() => {
+      if (this.apiCallCount > 0) {
+        console.log(`🔄 API call counter reset. Previous hour: ${this.apiCallCount} calls (${this.environment})`);
+        console.log(`💰 Estimated cost this hour: $${this.dailyCostEstimate.toFixed(4)}`);
+      }
+      this.apiCallCount = 0;
+      this.dailyCostEstimate = 0;
+    }, 60 * 60 * 1000);
+  }
+
+  // API call protection wrapper with enhanced safety
+  private async makeApiCall(url: string, cacheKey?: string, apiType: string = 'UNKNOWN'): Promise<any> {
+    // Emergency stop check
+    if (EMERGENCY_API_STOP) {
+      console.error('🚨 EMERGENCY API STOP ACTIVATED - All API calls blocked');
+      throw new Error('Emergency API stop is active');
+    }
+
+    // Check API call limit  
+    const maxCalls = this.apiLimits.MAX_PLACES_CALLS_PER_HOUR;
+    if (this.apiCallCount >= maxCalls) {
+      console.warn(`🚫 API call limit reached (${maxCalls}/hour). Request blocked.`);
+      throw new Error(`API call limit reached for this hour (${maxCalls})`);
+    }
+
+    // Check cache first
+    const cacheExpiryTime = this.apiLimits.CACHE_EXPIRY_MINUTES * 60 * 1000;
+    if (cacheKey && this.apiCallCache.has(cacheKey)) {
+      const cached = this.apiCallCache.get(cacheKey)!;
+      if (Date.now() - cached.timestamp < cacheExpiryTime) {
+        console.log(`📦 Using cached ${apiType} response`);
+        return cached.data;
+      } else {
+        this.apiCallCache.delete(cacheKey);
+      }
+    }
+
+    // Make the API call
+    this.apiCallCount++;
+    
+    // Update cost estimate
+    const costPer1K = apiType === 'PLACES' ? 0.032 : 0.005;
+    this.dailyCostEstimate += costPer1K / 1000;
+    
+    console.log(`📡 ${apiType} API call ${this.apiCallCount}/${maxCalls} (${this.environment})`);
+    
+    // Development warnings
+    if (DEV_WARNINGS.SHOW_API_COST_WARNINGS && this.dailyCostEstimate > 0.01) {
+      console.warn(`💰 Estimated cost today: $${this.dailyCostEstimate.toFixed(4)}`);
+    }
+    
+    if (DEV_WARNINGS.WARN_ON_HIGH_FREQUENCY_CALLS && this.apiCallCount > DEV_WARNINGS.MAX_CALLS_BEFORE_WARNING) {
+      console.warn('⚠️ High API usage detected - Review your code for loops or excessive calls!');
+    }
+    
+    const response = await fetch(url);
+    const data = await response.json();
+
+    // Cache the response
+    if (cacheKey && data.status === 'OK') {
+      this.apiCallCache.set(cacheKey, { data, timestamp: Date.now() });
+    }
+
+    return data;
   }
 
   async searchNearbyPlaces(
@@ -90,9 +165,9 @@ class PlacesService {
   ): Promise<PlaceDetails[]> {
     try {
       const url = `${this.baseUrl}/nearbysearch/json?location=${latitude},${longitude}&radius=${radius}&type=${type}&key=${this.apiKey}`;
+      const cacheKey = `nearby_${latitude}_${longitude}_${radius}_${type}`;
       
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await this.makeApiCall(url, cacheKey, 'PLACES');
 
       if (data.status === 'OK') {
         return data.results.map((place: any) => ({
@@ -116,9 +191,9 @@ class PlacesService {
   async getPlaceDetails(placeId: string): Promise<PlaceDetails | null> {
     try {
       const url = `${this.baseUrl}/details/json?place_id=${placeId}&fields=place_id,name,formatted_address,geometry,business_status,opening_hours&key=${this.apiKey}`;
+      const cacheKey = `details_${placeId}`;
       
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await this.makeApiCall(url, cacheKey, 'PLACES');
 
       if (data.status === 'OK') {
         return {
@@ -139,228 +214,34 @@ class PlacesService {
     }
   }
 
-  async getDistanceMatrix(
-    origins: Array<{ lat: number; lng: number }>,
-    destinations: Array<{ lat: number; lng: number }>
-  ): Promise<any> {
-    try {
-      const originsStr = origins.map(o => `${o.lat},${o.lng}`).join('|');
-      const destinationsStr = destinations.map(d => `${d.lat},${d.lng}`).join('|');
-      
-      const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originsStr}&destinations=${destinationsStr}&departure_time=now&traffic_model=best_guess&key=${this.apiKey}`;
-      
-      const response = await fetch(url);
-      const data = await response.json();
 
-      if (data.status === 'OK') {
-        return data;
-      } else {
-        console.error('Distance Matrix API error:', data.status, data.error_message);
-        return null;
-      }
-    } catch (error) {
-      console.error('Error fetching distance matrix:', error);
-      return null;
-    }
-  }
-
+  // UPDATED: Use static border crossing data (no API calls, no recalculation)
   getBorderCrossingLocations(): BorderCrossingLocation[] {
-    return [
-      {
-        id: 'san-ysidro',
-        name: 'San Ysidro Port of Entry',
-        city: 'San Diego',
-        placeId: 'ChIJR1jIhx5T2YARQFVbSPr4Fdk',
-        coordinate: { latitude: 32.5422, longitude: -117.0307 },
-        address: 'San Ysidro, CA 92173, USA',
-        operatingHours: {
-          open: '00:00',
-          close: '23:59',
-          is24Hours: true,
-        },
-        gateStatus: 'open',
-        averageWaitTime: 45,
-        lastCarPosition: {
-          latitude: 32.5419,
-          longitude: -117.0305,
-          timestamp: new Date(Date.now() - 300000), // 5 minutes ago
-          lineId: 'sy-vehicle-1',
-        },
-        waitingLines: [
-          {
-            id: 'sy-vehicle-1',
-            name: 'Vehicle Lane 1',
-            type: 'vehicle',
-            coordinate: { latitude: 32.5420, longitude: -117.0305 },
-            estimatedWaitTime: 45,
-            currentCarCount: 25,
-          },
-          {
-            id: 'sy-vehicle-2',
-            name: 'Vehicle Lane 2',
-            type: 'vehicle',
-            coordinate: { latitude: 32.5421, longitude: -117.0306 },
-            estimatedWaitTime: 38,
-            currentCarCount: 20,
-          },
-          {
-            id: 'sy-pedestrian',
-            name: 'Pedestrian Lane',
-            type: 'pedestrian',
-            coordinate: { latitude: 32.5423, longitude: -117.0308 },
-            estimatedWaitTime: 15,
-            currentCarCount: 30,
-          },
-        ],
-      },
-      {
-        id: 'otay-mesa',
-        name: 'Otay Mesa Port of Entry',
-        city: 'San Diego',
-        placeId: 'ChIJaVlTSqVT2YARKVLXqUHHzPI',
-        coordinate: { latitude: 32.5516, longitude: -116.9387 },
-        address: 'Otay Mesa, CA 92154, USA',
-        operatingHours: {
-          open: '06:00',
-          close: '22:00',
-          is24Hours: false,
-        },
-        gateStatus: 'open',
-        averageWaitTime: 25,
-        lastCarPosition: {
-          latitude: 32.5513,
-          longitude: -116.9385,
-          timestamp: new Date(Date.now() - 180000), // 3 minutes ago
-          lineId: 'om-vehicle-1',
-        },
-        waitingLines: [
-          {
-            id: 'om-vehicle-1',
-            name: 'Vehicle Lane 1',
-            type: 'vehicle',
-            coordinate: { latitude: 32.5514, longitude: -116.9385 },
-            estimatedWaitTime: 25,
-            currentCarCount: 15,
-          },
-          {
-            id: 'om-vehicle-2',
-            name: 'Vehicle Lane 2',
-            type: 'vehicle',
-            coordinate: { latitude: 32.5515, longitude: -116.9386 },
-            estimatedWaitTime: 30,
-            currentCarCount: 18,
-          },
-        ],
-      },
-      {
-        id: 'tecate',
-        name: 'Tecate Port of Entry',
-        city: 'Tecate',
-        placeId: 'ChIJK4ESjqFT2YARlWQ8dA4cCho',
-        coordinate: { latitude: 32.5764, longitude: -116.6283 },
-        address: 'Tecate, CA 91980, USA',
-        operatingHours: {
-          open: '06:00',
-          close: '20:00',
-          is24Hours: false,
-        },
-        gateStatus: 'open',
-        averageWaitTime: 10,
-        lastCarPosition: {
-          latitude: 32.5761,
-          longitude: -116.6281,
-          timestamp: new Date(Date.now() - 600000), // 10 minutes ago
-          lineId: 'tc-vehicle-1',
-        },
-        waitingLines: [
-          {
-            id: 'tc-vehicle-1',
-            name: 'Vehicle Lane 1',
-            type: 'vehicle',
-            coordinate: { latitude: 32.5762, longitude: -116.6281 },
-            estimatedWaitTime: 10,
-            currentCarCount: 5,
-          },
-        ],
-      },
-      {
-        id: 'mexicali',
-        name: 'Mexicali Port of Entry',
-        city: 'Mexicali',
-        placeId: 'ChIJaVlTSqVT2YARKVLXqUHHzPI',
-        coordinate: { latitude: 32.6703, longitude: -115.4951 },
-        address: 'Mexicali, Baja California, Mexico',
-        operatingHours: {
-          open: '00:00',
-          close: '23:59',
-          is24Hours: true,
-        },
-        gateStatus: 'open',
-        averageWaitTime: 60,
-        lastCarPosition: {
-          latitude: 32.6700,
-          longitude: -115.4950,
-          timestamp: new Date(Date.now() - 420000), // 7 minutes ago
-          lineId: 'mx-vehicle-1',
-        },
-        waitingLines: [
-          {
-            id: 'mx-vehicle-1',
-            name: 'Vehicle Lane 1',
-            type: 'vehicle',
-            coordinate: { latitude: 32.6700, longitude: -115.4950 },
-            estimatedWaitTime: 60,
-            currentCarCount: 40,
-          },
-          {
-            id: 'mx-vehicle-2',
-            name: 'Vehicle Lane 2',
-            type: 'vehicle',
-            coordinate: { latitude: 32.6701, longitude: -115.4951 },
-            estimatedWaitTime: 55,
-            currentCarCount: 35,
-          },
-        ],
-      },
-    ];
+    console.log('📍 Using static border crossing locations (no API calls)');
+    return convertToPlacesServiceFormat();
   }
 
+  // UPDATED: Use database-driven traffic calculations instead of expensive Google API
   async getTrafficDataForBorderCrossings(): Promise<TrafficData[]> {
     const borderCrossings = this.getBorderCrossingLocations();
     const trafficData: TrafficData[] = [];
 
     for (const crossing of borderCrossings) {
       try {
-        // Get traffic data using Distance Matrix API with current time
-        const origins = [{ lat: crossing.coordinate.latitude, lng: crossing.coordinate.longitude }];
-        const destinations = [{ lat: crossing.coordinate.latitude + 0.01, lng: crossing.coordinate.longitude + 0.01 }];
+        // Calculate congestion based on wait time instead of Google API
+        const waitTime = crossing.averageWaitTime;
+        const congestionLevel = this.calculateCongestionFromWaitTime(waitTime);
+        const estimatedSpeed = this.estimateSpeedFromWaitTime(waitTime);
         
-        const distanceData = await this.getDistanceMatrix(origins, destinations);
-        
-        if (distanceData && distanceData.rows[0].elements[0].status === 'OK') {
-          const element = distanceData.rows[0].elements[0];
-          const travelTime = element.duration_in_traffic ? element.duration_in_traffic.value : element.duration.value;
-          const normalTravelTime = element.duration.value;
-          
-          // Calculate congestion level based on travel time difference
-          const congestionRatio = travelTime / normalTravelTime;
-          let congestionLevel: 'low' | 'moderate' | 'heavy' | 'severe';
-          
-          if (congestionRatio < 1.2) congestionLevel = 'low';
-          else if (congestionRatio < 1.5) congestionLevel = 'moderate';
-          else if (congestionRatio < 2.0) congestionLevel = 'heavy';
-          else congestionLevel = 'severe';
-
-          trafficData.push({
-            placeId: crossing.placeId,
-            congestionLevel,
-            averageSpeed: element.distance.value / travelTime * 3.6, // km/h
-            travelTime,
-            lastUpdated: new Date(),
-          });
-        }
+        trafficData.push({
+          placeId: crossing.placeId,
+          congestionLevel,
+          averageSpeed: estimatedSpeed,
+          travelTime: waitTime * 60, // Convert minutes to seconds
+          lastUpdated: new Date(),
+        });
       } catch (error) {
-        console.error(`Error getting traffic data for ${crossing.name}:`, error);
+        console.error(`Error calculating traffic data for ${crossing.name}:`, error);
       }
     }
 
@@ -402,9 +283,9 @@ class PlacesService {
       const destinationStr = `${destination.latitude},${destination.longitude}`;
       
       const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destinationStr}&key=${this.apiKey}`;
+      const cacheKey = `directions_${originStr}_${destinationStr}`;
       
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await this.makeApiCall(url, cacheKey, 'DIRECTIONS');
 
       if (data.status === 'OK') {
         return data.routes[0];
@@ -448,10 +329,23 @@ class PlacesService {
 
   async detectUserCity(latitude: number, longitude: number): Promise<string> {
     try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${this.apiKey}`;
+      // OPTIMIZATION: Use geographic approximation first (no API calls)
+      const geoCity = this.approximateCityFromCoordinates(latitude, longitude);
+      if (geoCity !== 'Unknown') {
+        console.log(`📍 City detected using coordinates: ${geoCity} (no API call)`);
+        return geoCity;
+      }
       
-      const response = await fetch(url);
-      const data = await response.json();
+      // Only use Google API if really needed and within limits
+      if (this.apiCallCount >= this.apiLimits.MAX_GEOCODING_CALLS_PER_HOUR - 2) {
+        console.warn('🚫 Geocoding API limit near, using coordinate approximation');
+        return this.approximateCityFromCoordinates(latitude, longitude);
+      }
+      
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${this.apiKey}`;
+      const cacheKey = `geocode_${latitude.toFixed(3)}_${longitude.toFixed(3)}`; // Rounded for better caching
+      
+      const data = await this.makeApiCall(url, cacheKey, 'GEOCODING');
 
       if (data.status === 'OK' && data.results.length > 0) {
         const result = data.results[0];
@@ -473,20 +367,32 @@ class PlacesService {
         }
       }
       
-      // Default fallback based on coordinates (rough estimation)
-      if (latitude >= 32.5 && latitude <= 32.7 && longitude >= -117.5 && longitude <= -116.9) {
-        return 'San Diego';
-      } else if (latitude >= 32.5 && latitude <= 32.6 && longitude >= -116.7 && longitude <= -116.5) {
-        return 'Tecate';
-      } else if (latitude >= 32.6 && latitude <= 32.8 && longitude >= -115.6 && longitude <= -115.3) {
-        return 'Mexicali';
-      }
-      
-      return 'Unknown';
+      return this.approximateCityFromCoordinates(latitude, longitude);
     } catch (error) {
       console.error('Error detecting user city:', error);
-      return 'Unknown';
+      return this.approximateCityFromCoordinates(latitude, longitude);
     }
+  }
+
+  // Helper: Approximate city from coordinates (no API calls)
+  private approximateCityFromCoordinates(latitude: number, longitude: number): string {
+    // San Diego area
+    if (latitude >= 32.5 && latitude <= 32.7 && longitude >= -117.5 && longitude <= -116.9) {
+      return 'San Diego';
+    }
+    // Tecate area  
+    if (latitude >= 32.5 && latitude <= 32.6 && longitude >= -116.7 && longitude <= -116.5) {
+      return 'Tecate';
+    }
+    // Mexicali/Calexico area
+    if (latitude >= 32.6 && latitude <= 32.8 && longitude >= -115.6 && longitude <= -115.3) {
+      return 'Mexicali';
+    }
+    
+    // Default to closest major city
+    if (longitude > -116.5) return 'Mexicali';
+    if (longitude > -117.0) return 'Tecate';
+    return 'San Diego';
   }
 
   getNearestCrossingsToLocation(
@@ -559,13 +465,13 @@ class PlacesService {
     
     crossingsWithData.forEach((crossing, index) => {
       if (crossing.averageWaitTime === shortestWaitTime && crossing.averageWaitTime <= 15) {
-        crossing.recommendation = 'best';
+        (crossing as any).recommendation = 'best';
         crossing.recommendationReason = 'Shortest wait time and very fast';
       } else if (crossing.averageWaitTime === shortestWaitTime) {
-        crossing.recommendation = 'fastest';
+        (crossing as any).recommendation = 'fastest';
         crossing.recommendationReason = 'Shortest wait time';
       } else if (crossing.id === nearestCrossing.id && crossing.distance < 5000) {
-        crossing.recommendation = 'nearest';
+        (crossing as any).recommendation = 'nearest';
         crossing.recommendationReason = 'Closest to your location';
       }
     });
@@ -590,6 +496,96 @@ class PlacesService {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
     return R * c; // Distance in meters
+  }
+
+  // Helper functions for database-driven traffic calculations (replacing expensive Google APIs)
+  private calculateCongestionFromWaitTime(waitTime: number): 'low' | 'moderate' | 'heavy' | 'severe' {
+    if (waitTime < 20) return 'low';
+    if (waitTime < 45) return 'moderate';
+    if (waitTime < 90) return 'heavy';
+    return 'severe';
+  }
+
+  private estimateSpeedFromWaitTime(waitTime: number): number {
+    // Estimate average speed based on wait time (km/h)
+    if (waitTime < 20) return 45; // Light traffic
+    if (waitTime < 45) return 25; // Moderate traffic  
+    if (waitTime < 90) return 15; // Heavy traffic
+    return 8; // Severe traffic
+  }
+
+  private calculateTrafficLevel(waitTime: number): 'light' | 'moderate' | 'heavy' | 'severe' {
+    if (waitTime < 20) return 'light';
+    if (waitTime < 45) return 'moderate';
+    if (waitTime < 90) return 'heavy';
+    return 'severe';
+  }
+
+  private estimateVehicleCount(waitTime: number, trafficLevel: 'light' | 'moderate' | 'heavy' | 'severe'): number {
+    const baseMultiplier = {
+      'light': 0.7,
+      'moderate': 1.0,
+      'heavy': 1.3,
+      'severe': 1.8
+    };
+    
+    let vehicleCount = Math.floor(waitTime * baseMultiplier[trafficLevel]);
+    
+    // Add some randomness to simulate real-time changes
+    vehicleCount += Math.floor(Math.random() * 10) - 5; // ±5 vehicles
+    return Math.max(5, vehicleCount); // Minimum 5 vehicles
+  }
+
+  // Simplified queue end calculation (no expensive Google Directions API)
+  private async calculateQueueEndLocationSimple(
+    crossing: BorderCrossingLocation,
+    vehicleCount: number
+  ): Promise<{
+    latitude: number;
+    longitude: number;
+    nearbyLandmark?: string;
+    estimatedDistance: number;
+  } | null> {
+    try {
+      const avgVehicleSpacing = 6.5; // meters per vehicle
+      const queueLength = vehicleCount * avgVehicleSpacing;
+      
+      // Simple estimation: extend south from the border crossing
+      const latOffset = queueLength / 111320; // Rough conversion: 1 degree lat ≈ 111,320 meters
+      
+      const endLocation = {
+        latitude: crossing.coordinate.latitude - latOffset,
+        longitude: crossing.coordinate.longitude,
+      };
+      
+      // Only use Google Places API for landmark if within reasonable limits
+      let nearbyLandmark = `Approximately ${(queueLength / 1000).toFixed(1)}km from border`;
+      
+      if (this.apiCallCount < this.apiLimits.MAX_PLACES_CALLS_PER_HOUR - 5) { // Keep some buffer
+        try {
+          const landmark = await this.findNearestLandmark(
+            endLocation.latitude,
+            endLocation.longitude,
+            crossing.coordinate
+          );
+          if (landmark) {
+            nearbyLandmark = landmark.fullDescription;
+          }
+        } catch (error) {
+          console.warn('Could not get landmark, using distance estimate');
+        }
+      }
+      
+      return {
+        latitude: endLocation.latitude,
+        longitude: endLocation.longitude,
+        nearbyLandmark,
+        estimatedDistance: queueLength
+      };
+    } catch (error) {
+      console.error('Error calculating simple queue location:', error);
+      return null;
+    }
   }
 
   // Real-time queue tracking methods
@@ -974,9 +970,9 @@ class PlacesService {
   async getStreetAddress(latitude: number, longitude: number): Promise<string> {
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${this.apiKey}`;
+      const cacheKey = `street_${latitude}_${longitude}`;
       
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await this.makeApiCall(url, cacheKey, 'GEOCODING');
 
       if (data.status === 'OK' && data.results.length > 0) {
         const result = data.results[0];
@@ -1050,7 +1046,7 @@ class PlacesService {
     };
   }
 
-  // Enhanced real-time queue data using Google Maps traffic data
+  // UPDATED: Database-driven queue data (no expensive Google APIs)
   async getRealTimeQueueData(crossing: BorderCrossingLocation): Promise<{
     vehicleCount: number;
     queueEndLocation: { 
@@ -1076,43 +1072,13 @@ class PlacesService {
     trafficLevel: 'light' | 'moderate' | 'heavy' | 'severe';
   }> {
     try {
-      // Get current traffic data
-      const trafficData = await this.getDistanceMatrix(
-        [{ lat: crossing.coordinate.latitude, lng: crossing.coordinate.longitude }],
-        [{ lat: crossing.coordinate.latitude + 0.01, lng: crossing.coordinate.longitude + 0.01 }]
-      );
+      // Use wait time based calculations instead of expensive Google API
+      const waitTime = crossing.averageWaitTime;
+      const trafficLevel = this.calculateTrafficLevel(waitTime);
+      const vehicleCount = this.estimateVehicleCount(waitTime, trafficLevel);
       
-      let vehicleCount = crossing.averageWaitTime; // Base estimate
-      let trafficLevel: 'light' | 'moderate' | 'heavy' | 'severe' = 'moderate';
-      
-      if (trafficData && trafficData.rows[0].elements[0].status === 'OK') {
-        const element = trafficData.rows[0].elements[0];
-        const travelTime = element.duration_in_traffic ? element.duration_in_traffic.value : element.duration.value;
-        const normalTravelTime = element.duration.value;
-        const congestionRatio = travelTime / normalTravelTime;
-        
-        // Estimate vehicle count based on congestion and wait time
-        if (congestionRatio < 1.2) {
-          trafficLevel = 'light';
-          vehicleCount = Math.max(5, Math.floor(crossing.averageWaitTime * 0.7));
-        } else if (congestionRatio < 1.5) {
-          trafficLevel = 'moderate';
-          vehicleCount = Math.floor(crossing.averageWaitTime * 1.0);
-        } else if (congestionRatio < 2.0) {
-          trafficLevel = 'heavy';
-          vehicleCount = Math.floor(crossing.averageWaitTime * 1.3);
-        } else {
-          trafficLevel = 'severe';
-          vehicleCount = Math.floor(crossing.averageWaitTime * 1.8);
-        }
-        
-        // Add some randomness to simulate real-time changes
-        vehicleCount += Math.floor(Math.random() * 10) - 5; // ±5 vehicles
-        vehicleCount = Math.max(0, vehicleCount);
-      }
-      
-      // Calculate queue end location
-      const queueEndLocation = await this.calculateQueueEndLocation(crossing, vehicleCount);
+      // Calculate queue end location using simple estimation
+      const queueEndLocation = await this.calculateQueueEndLocationSimple(crossing, vehicleCount);
       
       return {
         vehicleCount,
@@ -1124,13 +1090,12 @@ class PlacesService {
     } catch (error) {
       console.error('Error getting real-time queue data:', error);
       
-      // Fallback to estimated data
+      // Fallback to basic estimated data
       const estimatedVehicleCount = Math.max(5, crossing.averageWaitTime);
-      const queueEndLocation = await this.calculateQueueEndLocation(crossing, estimatedVehicleCount);
       
       return {
         vehicleCount: estimatedVehicleCount,
-        queueEndLocation,
+        queueEndLocation: null,
         lastCarTimestamp: new Date(Date.now() - 300000), // 5 minutes ago
         trafficLevel: 'moderate'
       };

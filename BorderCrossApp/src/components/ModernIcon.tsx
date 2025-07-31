@@ -1,8 +1,8 @@
 import React from 'react';
 import { ViewStyle } from 'react-native';
-import IoniconsIcon from '@react-native-vector-icons/ionicons';
-import MaterialIcon from '@react-native-vector-icons/material-icons';
-import FeatherIcon from '@react-native-vector-icons/feather';
+import IoniconsIcon from 'react-native-vector-icons/Ionicons';
+import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
+import FeatherIcon from 'react-native-vector-icons/Feather';
 
 export type IconFamily = 'ionicons' | 'material' | 'feather';
 

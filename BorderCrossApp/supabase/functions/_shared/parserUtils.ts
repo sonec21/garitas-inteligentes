@@ -69,28 +69,50 @@ export function calculateVehicleCount(
   }
 }
 
+// STATIC BORDER CROSSING COORDINATES - NEVER CHANGE
+// These match exactly with src/config/borderCrossings.ts
+const STATIC_COORDINATES: { [key: string]: { lat: number; lng: number } } = {
+  'San Ysidro': { lat: 32.5422, lng: -117.0307 },
+  'San Ysidro PedWest': { lat: 32.5422, lng: -117.0309 },
+  'Otay Mesa': { lat: 32.5516, lng: -116.9387 },
+  'Otay Comercial': { lat: 32.5586, lng: -116.9319 },
+  'Tecate': { lat: 32.5764, lng: -116.6283 },
+  'Calexico': { lat: 32.6703, lng: -115.4951 },
+  // Add aliases for scraping variations
+  'Garita de San Ysidro': { lat: 32.5422, lng: -117.0307 },
+  'Garita de Otay': { lat: 32.5516, lng: -116.9387 },
+  'Garita de Otay Comercial': { lat: 32.5586, lng: -116.9319 },
+  'Calexico East': { lat: 32.6703, lng: -115.4951 },
+  'Calexico West': { lat: 32.6703, lng: -115.4951 },
+  'Nuevo Mexicali': { lat: 32.6703, lng: -115.4951 },
+};
+
+export function getStaticCoordinates(name: string): { lat: number; lng: number } {
+  // Direct match first
+  if (STATIC_COORDINATES[name]) {
+    return STATIC_COORDINATES[name];
+  }
+  
+  // Try partial match for scraped names
+  const lowerName = name.toLowerCase();
+  for (const [key, coords] of Object.entries(STATIC_COORDINATES)) {
+    if (key.toLowerCase().includes(lowerName) || lowerName.includes(key.toLowerCase())) {
+      console.log(`📍 Matched "${name}" to static coordinates for "${key}"`);
+      return coords;
+    }
+  }
+  
+  // Default fallback (San Diego area)
+  console.warn(`⚠️ No static coordinates found for "${name}", using default`);
+  return { lat: 32.55, lng: -116.9 };
+}
+
 export function getDefaultLatitude(name: string): number {
-  const coords: { [key: string]: number } = {
-    'San Ysidro': 32.5422,
-    'San Ysidro PedWest': 32.5422,
-    'Otay Mesa': 32.5586,
-    'Otay Comercial': 32.5586,
-    Tecate: 32.5761,
-    Calexico: 32.6759,
-  };
-  return coords[name] || 32.55;
+  return getStaticCoordinates(name).lat;
 }
 
 export function getDefaultLongitude(name: string): number {
-  const coords: { [key: string]: number } = {
-    'San Ysidro': -117.0309,
-    'San Ysidro PedWest': -117.0309,
-    'Otay Mesa': -116.9319,
-    'Otay Comercial': -116.9319,
-    Tecate: -116.6286,
-    Calexico: -115.4989,
-  };
-  return coords[name] || -116.9;
+  return getStaticCoordinates(name).lng;
 }
 
 export function determineLaneType(laneName: string): string {

@@ -12,7 +12,7 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Circle } from 'react-native-maps';
 import { useTheme } from '../context/ThemeContext';
 
-import { GOOGLE_MAPS_API_KEY } from '@env';
+import { GOOGLE_MAPS_API_KEY } from '../config/maps';
 import PlacesService, { BorderCrossingLocation, TrafficData, WaitingLine } from '../services/PlacesService';
 import CarTracker, { CarPosition } from '../components/CarTracker';
 import BorderCrossingList from '../components/BorderCrossingList';
@@ -20,6 +20,7 @@ import CityGaritasView from '../components/CityGaritasView';
 import Geolocation from 'react-native-geolocation-service';
 
 const MapScreen: React.FC = () => {
+  console.log('🗺️ MapScreen component starting to render...');
   const { theme } = useTheme();
   const [region] = useState({
     latitude: 32.5349, // Tijuana latitude
@@ -40,28 +41,31 @@ const MapScreen: React.FC = () => {
   const [showCityGaritas, setShowCityGaritas] = useState(false);
   const [mapRef, setMapRef] = useState<MapView | null>(null);
   const [loadingDirections, setLoadingDirections] = useState<string | null>(null);
+  const placesService = PlacesService; // Trivial change to force re-compilation // Trivial change to force re-compilation
 
   useEffect(() => {
     console.log('🗺️ Google Maps API Key loaded:', !!GOOGLE_MAPS_API_KEY);
     console.log('🗺️ Platform:', Platform.OS);
     
-    // Load border crossing locations
-    const crossings = PlacesService.getBorderCrossingLocations();
+    // Load border crossing locations (static data, no API calls)
+    const crossings = placesService.getBorderCrossingLocations();
     setBorderCrossings(crossings);
+    console.log('📍 Loaded', crossings.length, 'border crossings with static coordinates');
+    console.log('📍 Sample crossing:', crossings[0]?.name, 'at', crossings[0]?.coordinate);
     
-    // Load initial traffic data
+    // Load initial traffic data (database-driven, no Distance Matrix API)
     loadTrafficData();
     
     // Get user location
     getCurrentLocation();
-  }, []);
+  }, [loadTrafficData]);
 
   // Auto-show city garitas when user location is available
   useEffect(() => {
-    if (userLocation && !showCityGaritas && !showCrossingsList) {
+    if (userLocation && !selectedCrossing && !showCityGaritas && !showCrossingsList) {
       setShowCityGaritas(true);
     }
-  }, [userLocation, showCityGaritas, showCrossingsList]);
+  }, [userLocation, selectedCrossing, showCityGaritas, showCrossingsList]);
 
   const getCurrentLocation = () => {
     console.log('🔍 Requesting location permission...');
@@ -107,11 +111,18 @@ const MapScreen: React.FC = () => {
   const loadTrafficData = useCallback(async () => {
     setLoadingTraffic(true);
     try {
-      const traffic = await PlacesService.getTrafficDataForBorderCrossings();
+      console.log('🚦 Loading traffic data (database-driven, no expensive APIs)...');
+      const traffic = await placesService.getTrafficDataForBorderCrossings();
       setTrafficData(traffic);
-      console.log('🚦 Traffic data loaded:', traffic);
+      console.log('✅ Traffic data loaded successfully:', traffic.length, 'crossings');
     } catch (error) {
-      console.error('Error loading traffic data:', error);
+      console.error('❌ Error loading traffic data:', error);
+      // Show user-friendly error
+      Alert.alert(
+        'Traffic Data Error', 
+        'Unable to load current traffic data. Using estimated values.',
+        [{ text: 'OK' }]
+      );
     } finally {
       setLoadingTraffic(false);
     }
@@ -154,11 +165,10 @@ const MapScreen: React.FC = () => {
     setShowCityGaritas(false);
     
     console.log(`🎯 Zoomed to ${crossing.name}`);
-    
-    // Show direction options after zoom
-    setTimeout(() => {
-      showDirectionOptions(crossing);
-    }, 1200);
+  };
+
+  const handleViewOnMap = (crossing: BorderCrossingLocation) => {
+    handleCrossingSelect(crossing);
   };
 
   const showDirectionOptions = (crossing: BorderCrossingLocation) => {
@@ -169,7 +179,7 @@ const MapScreen: React.FC = () => {
 
     Alert.alert(
       `🏛️ ${crossing.name}`,
-      `📍 Distance: ${calculateDistanceText(crossing)}\n⏱️ Wait Time: ${crossing.averageWaitTime} minutes\n🚪 Status: ${PlacesService.isGateOpen(crossing) ? 'Open' : 'Closed'}\n\nChoose your action:`,
+      `📍 Distance: ${calculateDistanceText(crossing)}\n⏱️ Wait Time: ${crossing.averageWaitTime} minutes\n🚪 Status: ${placesService.isGateOpen(crossing) ? 'Open' : 'Closed'}\n\nChoose your action:`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -219,7 +229,7 @@ const MapScreen: React.FC = () => {
     setLoadingDirections(crossing.id);
     
     try {
-      const directions = await PlacesService.getDirections(userLocation, crossing.coordinate);
+      const directions = await placesService.getDirections(userLocation, crossing.coordinate);
       
       if (directions) {
         const route = directions.legs[0];
@@ -278,6 +288,7 @@ const MapScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {console.log(`MapScreen render: showCrossingsList=${showCrossingsList}, showCityGaritas=${showCityGaritas}`)}
       <View style={styles.mapContainer}>
         <MapView
           ref={setMapRef}
@@ -285,21 +296,30 @@ const MapScreen: React.FC = () => {
           style={styles.map}
           initialRegion={region}
           onMapReady={onMapReady}
-          onError={onMapError}
           showsUserLocation={true}
           showsMyLocationButton={true}
           showsCompass={true}
           showsScale={false}
           showsTraffic={true}
+          onError={onMapError}
         >
-          {borderCrossings.map((crossing) => {
+          {(selectedCrossing ? [selectedCrossing] : borderCrossings).map((crossing) => {
             const traffic = getTrafficDataForCrossing(crossing.placeId);
+            
+            // Validate coordinate data
+            if (!crossing.coordinate || 
+                typeof crossing.coordinate.latitude !== 'number' || 
+                typeof crossing.coordinate.longitude !== 'number') {
+              console.warn('⚠️ Invalid coordinates for crossing:', crossing.name);
+              return null;
+            }
+            
             return (
               <React.Fragment key={crossing.id}>
                 <Marker
                   coordinate={crossing.coordinate}
                   title={crossing.name}
-                  description={`${crossing.address}${traffic ? ` - ${traffic.congestionLevel.toUpperCase()} traffic` : ''}`}
+                  description={`${crossing.address}${traffic ? ` - ${traffic.congestionLevel.toUpperCase()} traffic` : ' - Using static data'}`}
                   onPress={() => handleCrossingSelect(crossing)}
                 >
                   <View style={[
@@ -322,20 +342,30 @@ const MapScreen: React.FC = () => {
                 )}
                 
                 {/* Waiting lines markers */}
-                {showWaitingLines && crossing.waitingLines?.map((line) => (
-                  <Marker
-                    key={line.id}
-                    coordinate={line.coordinate}
-                    title={line.name}
-                    description={`${line.type} lane${line.estimatedWaitTime ? ` - ~${line.estimatedWaitTime} min wait` : ''}`}
-                  >
-                    <View style={[styles.lineMarker, { backgroundColor: line.type === 'vehicle' ? '#2196F3' : '#9C27B0' }]}>
-                      <Text style={styles.lineMarkerText}>
-                        {line.type === 'vehicle' ? '🚗' : '🚶'}
-                      </Text>
-                    </View>
-                  </Marker>
-                ))}
+                {showWaitingLines && crossing.waitingLines?.map((line) => {
+                  // Validate line coordinate data
+                  if (!line.coordinate || 
+                      typeof line.coordinate.latitude !== 'number' || 
+                      typeof line.coordinate.longitude !== 'number') {
+                    console.warn('⚠️ Invalid line coordinates for:', line.name);
+                    return null;
+                  }
+                  
+                  return (
+                    <Marker
+                      key={line.id}
+                      coordinate={line.coordinate}
+                      title={line.name}
+                      description={`${line.type} lane${line.estimatedWaitTime ? ` - ~${line.estimatedWaitTime} min wait` : ''}`}
+                    >
+                      <View style={[styles.lineMarker, { backgroundColor: line.type === 'vehicle' ? '#2196F3' : '#9C27B0' }]}>
+                        <Text style={styles.lineMarkerText}>
+                          {line.type === 'vehicle' ? '🚗' : '🚶'}
+                        </Text>
+                      </View>
+                    </Marker>
+                  );
+                })}
                 
                 {/* Car position markers */}
                 {carPositions
@@ -376,6 +406,7 @@ const MapScreen: React.FC = () => {
               crossings={borderCrossings}
               onCrossingSelect={handleCrossingSelect}
               onGetDirections={handleGetDirections}
+              onViewOnMap={handleViewOnMap}
               userLocation={userLocation || undefined}
               loadingDirections={loadingDirections || undefined}
             />
@@ -389,6 +420,7 @@ const MapScreen: React.FC = () => {
               userLocation={userLocation}
               onCrossingSelect={handleCrossingSelect}
               onGetDirections={handleGetDirections}
+              onViewOnMap={handleViewOnMap}
               loadingDirections={loadingDirections || undefined}
             />
           </View>
@@ -429,12 +461,17 @@ const MapScreen: React.FC = () => {
                   {selectedCrossing.waitingLines.length} waiting lines available
                 </Text>
               )}
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setSelectedCrossing(null)}
-              >
-                <Text style={[styles.closeButtonText, { color: theme.colors.primary }]}>Close</Text>
-              </TouchableOpacity>
+              <View style={styles.actionIcons}>
+                <TouchableOpacity onPress={() => handleGetDirections(selectedCrossing)} style={styles.actionIcon}>
+                  <Text>🧭</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowCarTracker(true)} style={styles.actionIcon}>
+                  <Text>🚗</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setSelectedCrossing(null)} style={styles.actionIcon}>
+                  <Text>❌</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : (
             <View>
@@ -542,8 +579,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 40,
     left: 20,
-    right: 20,
-    padding: 16,
+    width: '50%',
+    padding: 10, // Reduced padding
     borderRadius: 12,
   },
   infoTitle: {
@@ -568,15 +605,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 2,
   },
-  closeButton: {
-    alignSelf: 'flex-end',
-    marginTop: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+  actionIcons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 10,
   },
-  closeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+  actionIcon: {
+    padding: 6, // Reduced padding
+    borderRadius: 5,
+    backgroundColor: '#f0f0f0',
   },
   errorContainer: {
     flex: 1,

@@ -17,6 +17,7 @@ interface CityGaritasViewProps {
   userLocation: { latitude: number; longitude: number };
   onCrossingSelect: (crossing: BorderCrossingLocation) => void;
   onGetDirections: (crossing: BorderCrossingLocation) => void;
+  onViewOnMap: (crossing: BorderCrossingLocation) => void; // Added this line
   loadingDirections?: string;
 }
 
@@ -31,6 +32,7 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
   userLocation,
   onCrossingSelect,
   onGetDirections,
+  onViewOnMap,
   loadingDirections,
 }) => {
   const { theme } = useTheme();
@@ -137,12 +139,15 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
   const handleCrossingPress = (crossing: BorderCrossingLocation) => {
     Alert.alert(
       `${crossing.name}`,
-      `Wait Time: ${crossing.averageWaitTime} minutes\nDistance: ${(crossing as CrossingWithRecommendation).distanceText}\n\nWhat would you like to do?`,
+      `Wait Time: ${crossing.averageWaitTime} minutes
+Distance: ${(crossing as CrossingWithRecommendation).distanceText}
+
+What would you like to do?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: '🗺️ View on Map', 
-          onPress: () => onCrossingSelect(crossing)
+          onPress: () => onViewOnMap(crossing)
         },
         { 
           text: '🧭 Get Directions', 
@@ -221,7 +226,7 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
                 borderColor: theme.colors.border,
               }
             ]}
-            onPress={() => handleCrossingPress(crossing)}
+            onPress={() => onViewOnMap(crossing)}
             disabled={isLoadingDirections}
           >
             {/* Recommendation Badge */}
@@ -324,6 +329,32 @@ const CityGaritasView: React.FC<CityGaritasViewProps> = ({
                 <Text style={[styles.actionText, { color: theme.colors.primary }]}>
                   Tap for options →
                 </Text>
+              )}
+            </View>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                onPress={() => onViewOnMap(crossing)}
+              >
+                <Text style={styles.actionButtonText}>📍 View on Map</Text>
+              </TouchableOpacity>
+              {userLocation && (
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    { 
+                      backgroundColor: isLoadingDirections ? theme.colors.disabled : '#2196F3'
+                    }
+                  ]}
+                  onPress={() => onGetDirections(crossing)}
+                  disabled={isLoadingDirections}
+                >
+                  {isLoadingDirections ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.actionButtonText}>🧭 Directions</Text>
+                  )}
+                </TouchableOpacity>
               )}
             </View>
           </TouchableOpacity>
