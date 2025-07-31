@@ -39,6 +39,8 @@ const MapScreen: React.FC = () => {
   const [showCarTracker, setShowCarTracker] = useState(false);
   const [showCrossingsList, setShowCrossingsList] = useState(false);
   const [showCityGaritas, setShowCityGaritas] = useState(false);
+  const [isInfoCardExpanded, setIsInfoCardExpanded] = useState(false);
+  const [isInfoCardExpanded, setIsInfoCardExpanded] = useState(false);
   const [mapRef, setMapRef] = useState<MapView | null>(null);
   const [loadingDirections, setLoadingDirections] = useState<string | null>(null);
   const placesService = PlacesService; // Trivial change to force re-compilation // Trivial change to force re-compilation
@@ -440,27 +442,6 @@ const MapScreen: React.FC = () => {
               <Text style={[styles.infoTitle, { color: theme.colors.text }]}>
                 {selectedCrossing.name}
               </Text>
-              <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                {selectedCrossing.address}
-              </Text>
-              {(() => {
-                const traffic = getTrafficDataForCrossing(selectedCrossing.placeId);
-                return traffic ? (
-                  <View style={styles.trafficInfo}>
-                    <Text style={[styles.trafficText, { color: getCongestionColor(traffic.congestionLevel) }]}>
-                      Traffic: {traffic.congestionLevel.toUpperCase()}
-                    </Text>
-                    <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                      Last updated: {traffic.lastUpdated.toLocaleTimeString()}
-                    </Text>
-                  </View>
-                ) : null;
-              })()}
-              {selectedCrossing.waitingLines && (
-                <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                  {selectedCrossing.waitingLines.length} waiting lines available
-                </Text>
-              )}
               <View style={styles.actionIcons}>
                 <TouchableOpacity onPress={() => handleGetDirections(selectedCrossing)} style={styles.actionIcon}>
                   <Text>🧭</Text>
@@ -582,6 +563,7 @@ const styles = StyleSheet.create({
     width: '50%',
     padding: 10, // Reduced padding
     borderRadius: 12,
+    maxHeight: isInfoCardExpanded ? 200 : 80, // Dynamic height
   },
   infoTitle: {
     fontSize: 16,
